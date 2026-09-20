@@ -54,7 +54,9 @@ python main.py --title "批次1|测试" "magnet:?xt=urn:btih:..."
 
 
 ### Metalink 模式
+
 python main.py path\to\file.meta4
+
 python main.py --metalink="<base64编码的meta4内容>"
 
 ### 更多

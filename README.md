@@ -47,8 +47,11 @@ python main.py
 
 ### 命令行模式
 python main.py "https://example.com/file.zip"
+
 python main.py --countdown=5 "https://example.com/file.zip"
+
 python main.py --title "批次1|测试" "magnet:?xt=urn:btih:..."
+
 
 ### Metalink 模式
 python main.py path\to\file.meta4

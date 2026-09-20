@@ -43,7 +43,7 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 
 --metalink 与 --callback-port 配合：返回 {"status":"success","GID":"<组长GID>"}。多文件时 GID 为组长 GID。
 
---metalink hash 校验：metalink 内若含 <verification><hash>，自动启用二次校验。
+--metalink hash 校验：metalink 内若含 `<verification><hash>`，自动启用二次校验。
 
 ### 2.2 命令式参数
 

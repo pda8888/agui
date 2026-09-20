@@ -1,0 +1,48 @@
+# 依赖 / 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# 构建产物
+build/
+dist/
+*.spec
+*.manifest
+
+# aria2 内核
+aria2c.exe
+aria2c
+
+# 运行期数据
+dht.dat
+dht6.dat
+*.aria2
+*.log
+agui-*.log
+
+# 测试资产
+fix/
+test_metalink_*.meta4
+test_metalink_*.metalink
+
+# 本地配置
+.agui/
+*.local
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 用户下载临时文件
+*.part
+multi_a.bin 
+multi_b.bin 

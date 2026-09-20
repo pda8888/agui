@@ -61,21 +61,20 @@ python main.py --metalink="<base64编码的meta4内容>"
 ---
 ## 项目结构
 .
-├── main.py 入口
-├── config.py 常量与主题
-├── arg_parser.py 命令行解析
-├── rpc_client.py aria2 JSON-RPC 封装
-├── process_manager.py aria2c 进程与防火墙
-├── ipc_server.py 单实例 IPC
-├── utils.py 工具函数
-├── ui_config.py 配置界面
-├── ui_download.py 下载监控主界面
-├── ui_styles.py UI 样式工厂
-├── ui_help.py 帮助窗口
-├── docs/
-│ └── CLI.md CLI / API 调用手册
-├── LICENSE
-└── README.md
+- `main.py` — 入口
+- `config.py` — 常量与主题
+- `arg_parser.py` — 命令行解析
+- `rpc_client.py` — aria2 JSON-RPC 封装
+- `process_manager.py` — aria2c 进程与防火墙
+- `ipc_server.py` — 单实例 IPC
+- `utils.py` — 工具函数
+- `ui_config.py` — 配置界面
+- `ui_download.py` — 下载监控主界面
+- `ui_styles.py` — UI 样式工厂
+- `ui_help.py` — 帮助窗口
+- `docs/CLI.md` — CLI / API 调用手册
+- `LICENSE`
+- `README.md`
 
 ## 键盘与鼠标
 

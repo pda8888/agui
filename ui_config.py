@@ -38,6 +38,13 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         self._history = self._load_history()
         self._history_popup = None
         self._initial_positioned = False
+        self._theme_menu_win = None
+        self._theme_fg_id = None
+        try:
+            from config import load_preferences as _lp
+            self.prefs = _lp()
+        except Exception:
+            self.prefs = {}
         self.title(APP_TITLE)
         self.configure(fg_color=Theme.BG) 
         self.resizable(True, True)
@@ -76,8 +83,8 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
 
     def _build_ui(self):
         """构建界面（Motrix 风格）"""
-        card = ctk.CTkFrame(self, fg_color=Theme.CARD, corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=15)
+        card = ctk.CTkFrame(self, fg_color=Theme.CARD, corner_radius=0)
+        card.pack(fill="both", expand=True, padx=0, pady=0)
 
         # ===== 顶部选项卡 =====
         tab_bar = ctk.CTkFrame(card, fg_color="transparent")
@@ -150,7 +157,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         ctk.CTkFrame(row1, width=20, height=1, fg_color="transparent").pack(side="left")
 
         create_label(row1, "分片数:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.split = create_spinbox(row1, initial=5, width=60)
+        self.split = create_spinbox(row1, initial=self.prefs.get("split", 5), width=60)
         self.split.pack(side="left")
 
         # ===== 存储路径 =====
@@ -166,7 +173,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             command=self._show_path_history,
         )
         self._clock_btn.pack(side="left", padx=(0, 5))
-        self.path_var = tk.StringVar(value=os.path.expanduser("~\\Downloads"))
+        self.path_var = tk.StringVar(value=self.prefs.get("path") or os.path.expanduser("~\\Downloads"))
         create_entry(row2, self.path_var).pack(side="left", fill="x", expand=True)
         create_button(row2, text="浏览", command=self._browse_folder,
                       width=60, style="secondary").pack(side="right", padx=(5, 0))
@@ -177,16 +184,17 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         ua_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         ua_row.pack(fill="x", pady=(10, 0))
         create_label(ua_row, "User-Agent:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.ua_var = tk.StringVar(value=DEFAULT_USER_AGENT)
+        self.ua_var = tk.StringVar(value=self.prefs.get("ua") or DEFAULT_USER_AGENT)
         create_entry(ua_row, self.ua_var).pack(side="left", fill="x", expand=True)
 
         ref_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         ref_row.pack(fill="x", pady=(10, 0))
         create_label(ref_row, "Referer:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.referer_var = tk.StringVar()
+        self.referer_var = tk.StringVar(value=self.prefs.get("referer", ""))
         create_entry(ref_row, self.referer_var).pack(side="left", fill="x", expand=True)
 
-        self.auto_referer_var = tk.BooleanVar(value=self.auto_referer_init)
+        self.auto_referer_var = tk.BooleanVar(
+            value=bool(self.prefs.get("auto_referer", False) or self.auto_referer_init))
         cb = create_checkbox(self.advanced_container, "自动提取 Referer", self.auto_referer_var)
         cb.pack(anchor="w", padx=(75, 0), pady=(2, 0))
         cb.configure(command=self._toggle_auto_referer)
@@ -212,7 +220,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         pr1 = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         pr1.pack(fill="x", pady=(10, 0))
         create_label(pr1, "最大连接数:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.max_conn = create_spinbox(pr1, initial=16, width=60)
+        self.max_conn = create_spinbox(pr1, initial=self.prefs.get("max_conn", 16), width=60)
         self.max_conn.pack(side="left")
 
         ctk.CTkFrame(pr1, width=20, height=1, fg_color="transparent").pack(side="left")
@@ -223,32 +231,32 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             state="readonly", font=FONT_SMALL, width=100, height=26,
             fg_color="#2d3748", border_color=Theme.MUTED, button_color=Theme.ACCENT,
         )
-        self.file_allocation.set("falloc")
+        self.file_allocation.set(self.prefs.get("file_allocation", "falloc"))
         self.file_allocation.pack(side="left")
 
         pr2 = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         pr2.pack(fill="x", pady=(10, 0))
         create_label(pr2, "RPC端口:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.rpc_port = create_spinbox(pr2, initial=16800, width=60)
+        self.rpc_port = create_spinbox(pr2, initial=self.prefs.get("rpc_port", 16800), width=60)
         self.rpc_port.pack(side="left")
 
         ctk.CTkFrame(pr2, width=20, height=1, fg_color="transparent").pack(side="left")
 
         create_label(pr2, "最小分片:", width=70, anchor="e").pack(side="left", padx=(0, 5))
         self.min_split_size = create_entry(pr2, width=60)
-        self.min_split_size.insert(0, "1M")
+        self.min_split_size.insert(0, self.prefs.get("min_split_size", "1M") or "1M")
         self.min_split_size.pack(side="left")
 
         ctk.CTkFrame(pr2, width=20, height=1, fg_color="transparent").pack(side="left")
 
         create_label(pr2, "速度限制:", width=70, anchor="e").pack(side="left", padx=(0, 5))
         self.speed_limit = create_entry(pr2, width=60)
-        self.speed_limit.insert(0, "0")
+        self.speed_limit.insert(0, self.prefs.get("speed_limit", "0") or "0")
         self.speed_limit.pack(side="left")
 
         log_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         log_row.pack(fill="x", pady=(10, 0))
-        self.log_enabled_var = tk.BooleanVar(value=True)
+        self.log_enabled_var = tk.BooleanVar(value=self.prefs.get("log_enabled", True))
         ctk.CTkCheckBox(
             log_row, text="记录日志", variable=self.log_enabled_var,
             text_color=Theme.TEXT, font=FONT_NORMAL,
@@ -257,7 +265,8 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             checkbox_width=20, checkbox_height=20,
         ).pack(side="left")
         _initial_name = os.path.basename(self.initial_log_file) if self.initial_log_file else ""
-        self.log_path_var = tk.StringVar(value=_initial_name)
+        _pref_lp = self.prefs.get("log_path", "") or _initial_name
+        self.log_path_var = tk.StringVar(value=_pref_lp)
         create_entry(log_row, self.log_path_var).pack(
             side="left", fill="x", expand=True, padx=(10, 0))
 
@@ -265,7 +274,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         bottom = ctk.CTkFrame(card, fg_color="transparent")
         bottom.pack(fill="x", padx=20, pady=(15, 15), side="bottom")
 
-        self.advanced_var = tk.BooleanVar(value=False)
+        self.advanced_var = tk.BooleanVar(value=self.prefs.get("advanced", False))
         ctk.CTkCheckBox(
             bottom, text="高级选项", variable=self.advanced_var,
             text_color=Theme.TEXT, font=FONT_NORMAL,
@@ -277,10 +286,19 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
 
         create_button(bottom, text="提交", command=self._start_download,
                       width=100).pack(side="right", padx=(10, 0))
+        create_button(bottom, text="保存配置", command=self._save_config_only,
+                      width=100, style="secondary").pack(side="right", padx=(10, 0))
         create_button(bottom, text="取消", command=self.destroy,
                       width=100, style="secondary").pack(side="right")
-        create_button(bottom, text="\u25d0 切换皮肤", command=self._cycle_theme,
-                      width=120, style="secondary").pack(side="left", padx=(15, 0))
+        self._skin_btn = create_button(bottom, text="\u25d0 切换皮肤",
+                                       command=self._show_theme_menu,
+                                       width=120, style="secondary")
+        self._skin_btn.pack(side="left", padx=(15, 0))
+        if self.advanced_var.get():
+            try:
+                self.advanced_container.pack(fill="x")
+            except Exception:
+                pass
     
     # --- 核心修改区域：参数行对齐 ---
     # 定义标准列宽，实现表格化对齐
@@ -379,30 +397,96 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         
         create_label(frame, "(0=无)", color=Theme.MUTED, font_size=11).pack(side="left")
     
-    def _cycle_theme(self):
+    def _show_theme_menu(self):
+        if getattr(self, "_theme_menu_win", None) is not None:
+            self._close_theme_menu()
+            return
         try:
-            from config import THEMES, load_config, save_config
+            from config import THEMES
         except Exception:
             return
-        names = list(THEMES.keys())
-        if not names:
+        top = tk.Toplevel(self)
+        top.overrideredirect(True)
+        top.attributes("-topmost", True)
+        top.configure(bg="#1f2937")
+        box = ctk.CTkFrame(top, fg_color=Theme.CARD, corner_radius=6,
+                            border_width=1, border_color=Theme.MUTED)
+        box.pack(fill="both", expand=True)
+
+        def _pick(name):
+            self._close_theme_menu()
+            self._apply_theme_choice(name)
+
+        for name in list(THEMES.keys()):
+            is_cur = (name == getattr(self, "_current_theme", ""))
+            label = ("\u2713 " if is_cur else "   ") + name
+            ctk.CTkButton(
+                box, text=label, anchor="w", width=150, height=28,
+                fg_color="transparent", hover_color="#4b5563",
+                text_color=(Theme.ACCENT if is_cur else Theme.TEXT),
+                font=FONT_SMALL, corner_radius=4, border_width=0,
+                command=lambda n=name: _pick(n),
+            ).pack(fill="x", padx=4, pady=1)
+
+        top.update_idletasks()
+        w = top.winfo_reqwidth()
+        h = top.winfo_reqheight()
+        try:
+            bx = self._skin_btn.winfo_rootx()
+            by = self._skin_btn.winfo_rooty()
+            bw = self._skin_btn.winfo_width()
+            bh = self._skin_btn.winfo_height()
+            x = bx + bw - w
+            y = by + bh + 4
+            top.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
+        self._theme_menu_win = top
+        self._theme_fg_id = self.after(300, self._poll_theme_fg)
+
+    def _poll_theme_fg(self):
+        self._theme_fg_id = None
+        if getattr(self, "_theme_menu_win", None) is None:
             return
-        cur = getattr(self, "_current_theme", "midnight")
         try:
-            idx = names.index(cur)
-        except ValueError:
-            idx = -1
-        nxt = names[(idx + 1) % len(names)]
+            import ctypes
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            pid = ctypes.c_ulong(0)
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value != os.getpid():
+                self._close_theme_menu()
+                return
+        except Exception:
+            pass
+        self._theme_fg_id = self.after(300, self._poll_theme_fg)
+
+    def _close_theme_menu(self):
+        if getattr(self, "_theme_fg_id", None):
+            try:
+                self.after_cancel(self._theme_fg_id)
+            except Exception:
+                pass
+            self._theme_fg_id = None
+        w = getattr(self, "_theme_menu_win", None)
+        if w is not None:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+            self._theme_menu_win = None
+
+    def _apply_theme_choice(self, name):
         try:
+            from config import load_config, save_config
             cfg = load_config()
-            cfg["theme"] = nxt
+            cfg["theme"] = name
             save_config(cfg)
-            self._current_theme = nxt
+            self._current_theme = name
         except Exception:
             pass
         try:
             from tkinter import messagebox
-            messagebox.showinfo("提示", f"皮肤已保存为 {nxt}，重启后生效")
+            messagebox.showinfo("提示", f"皮肤已保存为 {name}，重启后生效")
         except Exception:
             pass
 
@@ -423,6 +507,37 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             cfg = load_config()
             cfg["save_paths"] = dict(self._history)
             save_config(cfg)
+        except Exception:
+            pass
+
+    def _save_config_only(self):
+        self._save_preferences_from_ui()
+        try:
+            from tkinter import messagebox
+            messagebox.showinfo("提示", "配置已保存")
+        except Exception:
+            pass
+
+    def _save_preferences_from_ui(self):
+        try:
+            from config import load_preferences, save_preferences
+            prefs = load_preferences()
+            prefs["split"] = self.split.get()
+            prefs["path"] = self.path_var.get().strip()
+            prefs["ua"] = self.ua_var.get().strip()
+            prefs["referer"] = self.referer_var.get().strip()
+            prefs["auto_referer"] = bool(self.auto_referer_var.get())
+            prefs["max_conn"] = self.max_conn.get()
+            prefs["file_allocation"] = self.file_allocation.get()
+            prefs["rpc_port"] = self.rpc_port.get()
+            prefs["min_split_size"] = self.min_split_size.get().strip()
+            prefs["speed_limit"] = self.speed_limit.get().strip()
+            prefs["log_enabled"] = bool(self.log_enabled_var.get())
+            _init_lp = os.path.basename(self.initial_log_file) if self.initial_log_file else ""
+            _cur_lp = self.log_path_var.get().strip()
+            prefs["log_path"] = "" if _cur_lp == _init_lp else _cur_lp
+            prefs["advanced"] = bool(self.advanced_var.get())
+            save_preferences(prefs)
         except Exception:
             pass
 
@@ -673,6 +788,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             messagebox.showerror("无效输入", "无法识别有效的下载链接、磁力链或种子文件。")
             return
         self._add_to_history(save_path)
+        self._save_preferences_from_ui()
         
         if not self.is_master:
             reply = try_send_to_main_instance(aria2_args)

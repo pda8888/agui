@@ -150,6 +150,48 @@ def save_config(cfg):
     except Exception:
         pass
 
+
+DEFAULT_PREFERENCES = {
+    "split": 5,
+    "path": "",
+    "ua": "",
+    "referer": "",
+    "auto_referer": False,
+    "max_conn": 16,
+    "file_allocation": "falloc",
+    "rpc_port": 16800,
+    "min_split_size": "1M",
+    "speed_limit": "0",
+    "log_enabled": True,
+    "log_path": "",
+    "advanced": False,
+}
+
+
+def load_preferences():
+    """读取 preferences 子键，缺失字段用默认值补齐"""
+    try:
+        cfg = load_config()
+        prefs = cfg.get("preferences") or {}
+        result = dict(DEFAULT_PREFERENCES)
+        if isinstance(prefs, dict):
+            for k, v in prefs.items():
+                if k in result:
+                    result[k] = v
+        return result
+    except Exception:
+        return dict(DEFAULT_PREFERENCES)
+
+
+def save_preferences(prefs):
+    """写 preferences 到 agui_config.json，保留其他键"""
+    try:
+        cfg = load_config()
+        cfg["preferences"] = dict(prefs) if isinstance(prefs, dict) else {}
+        save_config(cfg)
+    except Exception:
+        pass
+
 # === Aria2 默认配置 ===
 def get_default_aria2_args(base_path):
     """返回aria2c默认启动参数"""

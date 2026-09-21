@@ -13,7 +13,7 @@ An ultra-lightweight downloader built on aria2c. Windows-first, under 30 MB RAM,
 - **Info hover overlay**: first-level directory aggregation, full expansion, scrollable, clipboard support
 - **Single-instance IPC**: subsequent launches auto-forward to the main instance
 - **CLI / HTTP API / callback port**: three integration paths for host programs
-- **Dark theme**: follows system DPI, centers on the work area
+- **Theme switching**: midnight / cyberpunk / cyberpunk_v1, follows system DPI, centers on the work area
 
 ## Requirements
 

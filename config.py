@@ -277,6 +277,7 @@ UI_ARG_PREFIXES = (
     "--callback-port",
     "--http-port",
     "-silent",
+    "--silent",
     "--metalink",
     "--verify-hash",
     "--marquee-interval",

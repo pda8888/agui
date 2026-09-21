@@ -201,7 +201,7 @@ def parse_args(argv):
         elif a.startswith("--verify-hash="):
             verify_hash = a.split("=", 1)[1]
             i += 1
-        elif a == "-silent":
+        elif a in ("-silent", "--silent"):
             silent = True
             i += 1
             

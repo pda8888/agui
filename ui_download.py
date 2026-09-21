@@ -418,7 +418,6 @@ class Aria2GUI(ctk.CTkToplevel):
                     "retry": ("retry_count", int),
                     "retry-interval": ("retry_interval", int),
                     "retry-exhausted-timeout": ("retry_exhausted_timeout", int),
-                    "countdown": ("close_delay", int),
                     "position": ("position_offset", str),
                 }
                 for key, value in params.items():
@@ -447,6 +446,13 @@ class Aria2GUI(ctk.CTkToplevel):
                         elif value != "":
                             cmd_args.append(flag)
                             cmd_args.append(str(value))
+
+                _cd = params.get("countdown")
+                if _cd is not None and _cd != "":
+                    cmd_args.append("--countdown=" + str(_cd))
+                _gcd = params.get("global-countdown")
+                if _gcd is not None and _gcd != "":
+                    cmd_args.append("--global-countdown=" + str(_gcd))
 
                 if has_metalink:
                     cmd_args.append("--metalink=" + metalink_b64.strip())

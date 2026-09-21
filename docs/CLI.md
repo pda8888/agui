@@ -43,7 +43,7 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 
 --metalink 与 --callback-port 配合：返回 {"status":"success","GID":"<组长GID>"}。多文件时 GID 为组长 GID。
 
---metalink hash 校验：metalink 内若含 `<verification><hash>`，自动启用二次校验。
+--metalink hash 校验：metalink 内若含 <verification><hash>，自动启用二次校验。
 
 ### 2.2 命令式参数
 
@@ -266,9 +266,23 @@ method 取值为 add / query / kill。
 
 返回同第四节"杀掉成功"。
 
-### 5.4 HTTP countdown 参数限制
+### 5.4 HTTP countdown
 
-_handle_add 内 global_keys 映射 countdown 到 close_delay，但 close_delay 属性在 ds-a02-23 之后已不再被读取。HTTP 方式设置 countdown 无效。需要任务级倒计时请走命令行。
+`add` 请求的 `params` 支持 `countdown` 与 `global-countdown` 两个字段，语义与命令行 `--countdown` / `--global-countdown` 一致：
+
+- `countdown`：任务级倒计时，本任务完成后 N 秒删卡
+- `global-countdown`：全局倒计时，覆盖所有未钉死任务
+
+```json
+{
+  "method": "add",
+  "params": {
+    "urls": ["https://a.com/x.zip"],
+    "countdown": 30,
+    "global-countdown": 60
+  }
+}
+```
 
 ---
 
@@ -327,7 +341,48 @@ agui-YYYY-MM-DD-HH-MM.log
 
 ---
 
-## 八、进程生命周期
+## 八、配置文件
+
+### 8.1 路径
+
+```
+~/.agui/agui_config.json
+```
+
+Windows 下即 `C:\\Users\\<用户名>\\.agui\\agui_config.json`。
+
+### 8.2 结构
+
+```json
+{
+  "theme": "midnight",
+  "save_paths": {"recent": [], "starred": []},
+  "preferences": {
+    "split": 5, "path": "",
+    "ua": "", "referer": "", "auto_referer": false,
+    "max_conn": 16, "file_allocation": "falloc",
+    "rpc_port": 16800, "min_split_size": "1M",
+    "speed_limit": "0", "log_enabled": true,
+    "log_path": "", "advanced": false
+  }
+}
+```
+
+### 8.3 字段
+
+- `theme`：当前主题，取值 `midnight` / `cyberpunk` / `cyberpunk_v1`
+- `save_paths.recent`：最近使用过的保存路径，最多 20 条，倒序
+- `save_paths.starred`：收藏的保存路径
+- `preferences`：配置界面各字段的持久化值，仅在无参数启动 GUI 时读写
+- 敏感字段不持久化：Authorization / Cookie / 代理 不写入此文件
+
+### 8.4 迁移
+
+首次启动若检测到旧文件 `~/.agui/save_paths.json`，自动迁移到 `agui_config.json` 的 `save_paths` 子键。旧文件保留作备份。
+
+---
+
+## 九、进程生命周期
 
 | 触发 | 效果 |
 |---|---|
@@ -340,7 +395,7 @@ agui-YYYY-MM-DD-HH-MM.log
 
 ---
 
-## 九、已知坑
+## 十、已知坑
 
 1. --query / --kill 建议只在主实例已运行时使用
 
@@ -348,31 +403,27 @@ agui-YYYY-MM-DD-HH-MM.log
 
    正确用法：先启动一个不带 query/kill 的主实例，再调 query/kill。
 
-2. HTTP countdown 参数当前失效
-
-   见 5.4。
-
-3. --title 需要 JSON 转义信息部分
+2. --title 需要 JSON 转义信息部分
 
    --title "标题|说明" 中说明部分若含双引号，需按 JSON 规则转义。简单场景不用管。
 
-4. metalink 多文件任务在 UI 上只对应 1 张卡
+3. metalink 多文件任务在 UI 上只对应 1 张卡
 
    组内所有 GID 由一个"组长 GID"代表。--query <非组长 GID> 会正常返回，但 UI 层不展示该卡。建议主程序通过 --query <组长 GID> 查询，组长 GID 是 add 返回的那个。
 
-5. --no-cancel 会锁死窗口
+4. --no-cancel 会锁死窗口
 
    任务未完成时无法关闭窗口、无法点卡片 X。主程序慎用。
 
-6. 回调端口重入
+5. 回调端口重入
 
    一次 agui 调用只回一次 callback。若主程序发送多个任务给同一 agui（HTTP 模式），每个 add 请求的响应走 HTTP 响应，不走 callback。
 
-7. -silent 模式不显示任何窗口
+6. `-silent` / `--silent` 模式不显示任何窗口
 
-   -silent 用于后台常驻，无 GUI。如需观察任务进度，请通过 HTTP query 或省略 -silent。
+   用于后台常驻，无 GUI。如需观察任务进度，请通过 HTTP query 或省略该参数。
 
-8. IPC 端口冲突
+7. IPC 端口冲突
 
    若上一轮 agui 未干净退出，19811 会被占用，新启动的进程被当作从实例转发后退出，表现为"启动无反应"。排查：
 
@@ -385,7 +436,7 @@ agui-YYYY-MM-DD-HH-MM.log
 
 ---
 
-## 十、推荐集成方式
+## 十一、推荐集成方式
 
 短连接同步添加：
 

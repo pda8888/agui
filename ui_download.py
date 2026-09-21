@@ -76,6 +76,13 @@ class Aria2GUI(ctk.CTkToplevel):
         self.shutdown_start_time = None
         self._refresh_after_id = None
         self.app_start_time = time.time()
+        try:
+            from config import load_config as _lc
+            self._current_theme = _lc().get("theme") or "midnight"
+        except Exception:
+            self._current_theme = "midnight"
+        self._tick_started = False
+        self._theme_menu_win = None
         
         secret = next(
             (a.split("=", 1)[1] for a in config["aria2_args"] if a.startswith("--rpc-secret=")),
@@ -130,12 +137,14 @@ class Aria2GUI(ctk.CTkToplevel):
                 corner_radius=4, border_width=0,
             )
         
+        self.btn_top_theme = _make_top_icon("◐", self._show_theme_menu)
         self.btn_top_play = _make_top_icon("▶", self._resume_all)
         self.btn_top_pause = _make_top_icon("‖", self._pause_all)
         self.btn_top_clear = _make_top_icon("✕", self._clear_all)
         self.btn_top_retry = _make_top_icon("↻", self._retry_all)
         self.btn_top_add = _make_top_icon("⊕", self._open_config_gui)
         self.btn_top_add.configure(width=42, height=36, font=(FONT_NORMAL[0], 22))
+        self.btn_top_theme.pack(side="right")
         self.btn_top_retry.pack(side="right")
         self.btn_top_clear.pack(side="right")
         self.btn_top_pause.pack(side="right")
@@ -147,6 +156,7 @@ class Aria2GUI(ctk.CTkToplevel):
         self._bind_tooltip(self.btn_top_pause, "暂停选中")
         self._bind_tooltip(self.btn_top_clear, "清除已完成")
         self._bind_tooltip(self.btn_top_retry, "重试失败")
+        self._bind_tooltip(self.btn_top_theme, "切换皮肤")
         
         self.lbl_global_stats = ctk.CTkLabel(
             right_box, text="", font=FONT_SMALL,
@@ -168,10 +178,12 @@ class Aria2GUI(ctk.CTkToplevel):
         # 仅当配置要求显示 GUI 时才取消隐藏
         if self.config.get("show_gui", True):
             self.deiconify()
-        self.after(500, self._ui_refresh_loop)
-        self.after(100, self._marquee_tick)
-        self.bind_all("<B1-Motion>", self._on_mouse_motion, add="+")
-        self.bind_all("<ButtonRelease-1>", self._on_mouse_release, add="+")
+        if not getattr(self, "_tick_started", False):
+            self._tick_started = True
+            self.after(500, self._ui_refresh_loop)
+            self.after(100, self._marquee_tick)
+            self.bind_all("<B1-Motion>", self._on_mouse_motion, add="+")
+            self.bind_all("<ButtonRelease-1>", self._on_mouse_release, add="+")
         self.bind("<FocusOut>", lambda _e: self._cancel_drag(), add="+")
 
     def _update_layout(self):
@@ -406,7 +418,6 @@ class Aria2GUI(ctk.CTkToplevel):
                     "title": "--title",
                     "out": "--out",
                     "dir": "--dir",
-                    "gid": "--gid",
                     "auto-referer": "--auto-referer",
                     "no-cancel": "--no-cancel",
                 }
@@ -633,15 +644,6 @@ class Aria2GUI(ctk.CTkToplevel):
                     break
         for _b64 in b64_metalinks:
             self._register_metalink_task(_b64, "Metalink 任务", task_no_cancel, task_title, task_countdown, opts)
-        # 提取 --gid 参数（兼容命令行首次启动）
-        for i, arg in enumerate(args_list):
-            if arg == "--gid" and i + 1 < len(args_list):
-                opts["gid"] = args_list[i + 1]
-                break
-            elif arg.startswith("--gid="):
-                opts["gid"] = arg.split("=", 1)[1]
-                break
-                
         if out_name and out_name != "download" and "out" not in opts:
             opts["out"] = out_name
         save_dir = opts.get("dir", os.getcwd())
@@ -654,12 +656,6 @@ class Aria2GUI(ctk.CTkToplevel):
         if "file-allocation" not in opts:
             opts["file-allocation"] = "none"
         
-        # 注入用户指定的 GID（如果存在）
-        # user_gid = self.config.get("gid")
-        # if user_gid:
-            # opts["gid"] = user_gid
-            # self.config["gid"] = None  # 仅用于当前任务
-            
         torrents, metalinks, magnets, http_mirrors = [], [], [], []
         for u in urls:
             low = u.lower()
@@ -733,15 +729,6 @@ class Aria2GUI(ctk.CTkToplevel):
         if _global_cd is not None:
             self.after(0, self._apply_global_countdown, _global_cd)
         
-        # 提取 --gid 参数
-        for i, arg in enumerate(args_list):
-            if arg == "--gid" and i + 1 < len(args_list):
-                opts["gid"] = args_list[i + 1]
-                break
-            elif arg.startswith("--gid="):
-                opts["gid"] = arg.split("=", 1)[1]
-                break
-                
         # 解析 --title 参数
         task_title = None
         for i, arg in enumerate(args_list):
@@ -765,12 +752,6 @@ class Aria2GUI(ctk.CTkToplevel):
         if "file-allocation" not in opts:
             opts["file-allocation"] = "none"
             
-        # 注入用户指定的 GID（如果存在）
-        # user_gid = self.config.get("gid")
-        # if user_gid:
-            # opts["gid"] = user_gid
-            # self.config["gid"] = None  # 仅用于当前任务
-        
         torrents, metalinks, magnets, http_mirrors = [], [], [], []
         for u in urls:
             low = u.lower()
@@ -905,8 +886,16 @@ class Aria2GUI(ctk.CTkToplevel):
         frame = ctk.CTkFrame(self.task_container, fg_color=Theme.CARD, corner_radius=8,
                              border_width=1, border_color=Theme.CARD)
         frame.pack(fill="x", pady=5)
-        inner = ctk.CTkFrame(frame, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=14, pady=10)
+        _is_cyber = (getattr(Theme, "STYLE", "flat") == "cyber")
+        if _is_cyber:
+            stripe = ctk.CTkFrame(frame, fg_color=Theme.ACCENT, width=4,
+                                   corner_radius=0)
+            stripe.pack(side="left", fill="y")
+            inner = ctk.CTkFrame(frame, fg_color="transparent")
+            inner.pack(side="left", fill="both", expand=True, padx=14, pady=10)
+        else:
+            inner = ctk.CTkFrame(frame, fg_color="transparent")
+            inner.pack(fill="both", expand=True, padx=14, pady=10)
         
         _title_lbl = None
         if task_title:
@@ -973,9 +962,18 @@ class Aria2GUI(ctk.CTkToplevel):
         btn_info.bind("<Enter>", lambda e, g=gid: self._schedule_info_show(g), add="+")
         btn_info.bind("<Leave>", lambda e, g=gid: self._schedule_info_hide(), add="+")
         
-        bar = ctk.CTkProgressBar(inner, height=6, corner_radius=3, progress_color=Theme.ACCENT)
-        bar.set(0)
-        bar.pack(fill="x", pady=(8, 6))
+        if _is_cyber:
+            _glow = ctk.CTkFrame(inner, fg_color="#0a1e2e", corner_radius=5)
+            _glow.pack(fill="x", pady=(6, 4))
+            bar = ctk.CTkProgressBar(_glow, height=6, corner_radius=3,
+                                      progress_color=Theme.ACCENT)
+            bar.set(0)
+            bar.pack(fill="x", padx=2, pady=2)
+        else:
+            bar = ctk.CTkProgressBar(inner, height=6, corner_radius=3,
+                                      progress_color=Theme.ACCENT)
+            bar.set(0)
+            bar.pack(fill="x", pady=(8, 6))
         
         line3 = ctk.CTkFrame(inner, fg_color="transparent")
         line3.pack(fill="x")
@@ -1477,6 +1475,113 @@ class Aria2GUI(ctk.CTkToplevel):
             self._add_task_from_args(aria2_args, explicit_title=title)
         except Exception:
             pass
+
+    def _show_theme_menu(self):
+        if getattr(self, "_theme_menu_win", None) is not None:
+            self._close_theme_menu()
+            return
+        try:
+            from config import THEMES
+        except Exception:
+            return
+        top = tk.Toplevel(self)
+        top.overrideredirect(True)
+        top.attributes("-topmost", True)
+        top.configure(bg="#1f2937")
+        box = ctk.CTkFrame(top, fg_color=Theme.CARD, corner_radius=6,
+                            border_width=1, border_color=Theme.MUTED)
+        box.pack(fill="both", expand=True)
+
+        def _pick(name):
+            self._close_theme_menu()
+            self._switch_theme(name)
+
+        for name in list(THEMES.keys()):
+            is_cur = (name == getattr(self, "_current_theme", ""))
+            label = ("\u2713 " if is_cur else "   ") + name
+            ctk.CTkButton(
+                box, text=label, anchor="w", width=150, height=28,
+                fg_color="transparent", hover_color="#4b5563",
+                text_color=(Theme.ACCENT if is_cur else Theme.TEXT),
+                font=FONT_SMALL, corner_radius=4, border_width=0,
+                command=lambda n=name: _pick(n),
+            ).pack(fill="x", padx=4, pady=1)
+
+        top.update_idletasks()
+        w = top.winfo_reqwidth()
+        h = top.winfo_reqheight()
+        try:
+            bx = self.btn_top_theme.winfo_rootx()
+            by = self.btn_top_theme.winfo_rooty()
+            bw = self.btn_top_theme.winfo_width()
+            bh = self.btn_top_theme.winfo_height()
+            x = bx + bw - w
+            y = by + bh + 4
+            top.geometry(f"{w}x{h}+{x}+{y}")
+        except Exception:
+            pass
+        self._theme_menu_win = top
+
+    def _close_theme_menu(self):
+        w = getattr(self, "_theme_menu_win", None)
+        if w is not None:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+            self._theme_menu_win = None
+
+    def _switch_theme(self, name):
+        try:
+            from config import apply_theme, load_config, save_config
+            apply_theme(name)
+            self._current_theme = name
+            cfg = load_config()
+            cfg["theme"] = name
+            save_config(cfg)
+        except Exception:
+            pass
+        self._rebuild_ui()
+
+    def _rebuild_ui(self):
+        try:
+            x = self.winfo_x()
+            y = self.winfo_y()
+        except Exception:
+            x = y = None
+        self._close_theme_menu()
+        try:
+            self._do_hide_info()
+        except Exception:
+            pass
+        self._active_tooltip = None
+        for attr in ("header", "task_container", "footer"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
+        with self.tasks_lock:
+            items = list(self.tasks.items())
+        for _gid, _task in items:
+            _task["ui"] = {}
+        self._build_ui()
+        for gid, task in items:
+            try:
+                task["ui"] = self._create_task_row(
+                    gid, task.get("name", ""),
+                    task.get("no_cancel", False),
+                    task.get("task_title"),
+                )
+            except Exception:
+                pass
+        if x is not None and y is not None:
+            try:
+                self.geometry(f"+{x}+{y}")
+            except Exception:
+                pass
+        self._update_layout()
 
     def _pause_all(self):
         for gid in self._get_target_gids():
@@ -2075,12 +2180,6 @@ class Aria2GUI(ctk.CTkToplevel):
                             self.tasks.pop(gid, None)
                         self._update_layout()
                         continue
-                        # 非活跃任务才可安全销毁
-                        ui["frame"].destroy()
-                        with self.tasks_lock:
-                            self.tasks.pop(gid, None)
-                        self._update_layout()
-                        continue
                     stat = res["result"]
                     _f = stat.get("files", [])
                     if _f:
@@ -2501,6 +2600,10 @@ class Aria2GUI(ctk.CTkToplevel):
     def _on_close(self):
         if self.is_running:
             self.is_running = False
+            try:
+                self._close_theme_menu()
+            except Exception:
+                pass
             try:
                 self._do_hide_info()
             except Exception:

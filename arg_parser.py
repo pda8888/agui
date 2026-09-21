@@ -15,7 +15,6 @@ def parse_args(argv):
     retry_exhausted_timeout = 10
     query_gid = None
     kill_gid = None
-    user_gid = None
     callback_port = None
     http_port = None
     silent = False
@@ -142,12 +141,6 @@ def parse_args(argv):
         elif a.startswith("--kill="):
             kill_gid = a.split("=", 1)[1]
             i += 1
-        elif a == "--gid" and i + 1 < len(argv):
-            user_gid = argv[i + 1]
-            i += 2
-        elif a.startswith("--gid="):
-            user_gid = a.split("=", 1)[1]
-            i += 1
         elif a == "--callback-port" and i + 1 < len(argv):
             try:
                 callback_port = int(argv[i + 1])
@@ -230,7 +223,6 @@ def parse_args(argv):
         "retry_exhausted_timeout": retry_exhausted_timeout,
         "query_gid": query_gid,
         "kill_gid": kill_gid,
-        "gid": user_gid,
         "callback_port": callback_port,
         "http_port": http_port,
         "silent": silent,

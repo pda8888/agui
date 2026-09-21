@@ -8,7 +8,7 @@ except Exception:
     pass
 
 """
-老王的小拖船 V1.2 - 主程序入口 (CustomTkinter版 - 修复根窗口问题)
+老王的小拖船 V1.4 - 主程序入口 (CustomTkinter版 - 修复根窗口问题)
 """
 import sys
 import os
@@ -96,6 +96,14 @@ def main():
     show_gui = not silent
     cfg["show_gui"] = show_gui
 
+    # 加载用户配置并应用主题
+    try:
+        from config import apply_theme, load_config
+        _user_cfg = load_config()
+        apply_theme(_user_cfg.get("theme", "midnight"))
+    except Exception:
+        pass
+
     # 4. 检测是否为主实例
     from ipc_server import try_bind_ipc_port, try_send_to_main_instance
     from utils import log_write, ensure_log_file
@@ -126,8 +134,6 @@ def main():
     if cfg.get("log_file"):
         ensure_log_file(cfg["log_file"])
 
-    if cfg.get("log_file"):
-        ensure_log_file(cfg["log_file"])
 
     if is_master:
         fw_ok = update_firewall_rules()

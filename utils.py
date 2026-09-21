@@ -179,20 +179,6 @@ def ensure_log_file(path):
         pass
 
 
-def ensure_log_file(path):
-    """确保日志文件存在（启动时调用，仅创建空文件）"""
-    if not path:
-        return
-    try:
-        d = os.path.dirname(os.path.abspath(path))
-        if d and not os.path.isdir(d):
-            os.makedirs(d, exist_ok=True)
-        if not os.path.exists(path):
-            open(path, "a", encoding="utf-8").close()
-    except Exception:
-        pass
-
-
 def log_write(path, text):
     """写入日志"""
     if not path:
@@ -231,7 +217,7 @@ def translate_error_online(text):
         })
         url = f"{base_url}?{params}"
         
-        req = urllib.request.Request(url, headers={'User-Agent': 'AGUI/1.2'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'AGUI/1.4'})
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             if data.get('responseStatus') == 200:

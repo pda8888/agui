@@ -3,6 +3,8 @@
 """配置常量和默认参数"""
 import sys
 import os
+import json
+import json
 
 
 # === 版本信息 ===
@@ -40,17 +42,113 @@ def get_aria2c_path():
 ARIA2_PATH = get_aria2c_path()
 
 # === UI 颜色主题 ===
+THEMES = {
+    "midnight": {
+        "BG": "#1f2937",
+        "CARD": "#374151",
+        "ACCENT": "#22d3ee",
+        "ACCENT_LIGHT": "#4b5563",
+        "TEXT": "#f9fafb",
+        "MUTED": "#9ca3af",
+        "SEMI_MUTED": "#d1d5db",
+        "ERROR": "#ef4444",
+        "SUCCESS": "#34d399",
+        "WARNING": "#fbbf24",
+        "_style": "flat",
+    },
+    "cyberpunk": {
+        "BG": "#0D1117",
+        "CARD": "#161B22",
+        "ACCENT": "#00E5FF",
+        "ACCENT_LIGHT": "#58A6FF",
+        "TEXT": "#C9D1D9",
+        "MUTED": "#8B949E",
+        "SEMI_MUTED": "#79C0FF",
+        "ERROR": "#F43F5E",
+        "SUCCESS": "#3FB950",
+        "WARNING": "#F59E0B",
+        "_style": "cyber",
+    },
+    "cyberpunk_v1": {
+        "BG": "#0d0221",
+        "CARD": "#1a0b2e",
+        "ACCENT": "#f72585",
+        "ACCENT_LIGHT": "#7209b7",
+        "TEXT": "#f0e9ff",
+        "MUTED": "#7b6d9c",
+        "SEMI_MUTED": "#b8a9d9",
+        "ERROR": "#ff0054",
+        "SUCCESS": "#00f5d4",
+        "WARNING": "#fee440",
+        "_style": "cyber",
+    },
+}
+
+DEFAULT_THEME = "midnight"
+
+
 class Theme:
-    BG = "#1f2937"
-    CARD = "#374151"
-    ACCENT = "#22d3ee"
-    ACCENT_LIGHT = "#4b5563"
-    TEXT = "#f9fafb"
-    MUTED = "#9ca3af"
-    SEMI_MUTED = "#d1d5db"
-    ERROR = "#ef4444"
-    SUCCESS = "#34d399"
-    WARNING = "#fbbf24"
+    BG = THEMES[DEFAULT_THEME]["BG"]
+    CARD = THEMES[DEFAULT_THEME]["CARD"]
+    ACCENT = THEMES[DEFAULT_THEME]["ACCENT"]
+    ACCENT_LIGHT = THEMES[DEFAULT_THEME]["ACCENT_LIGHT"]
+    TEXT = THEMES[DEFAULT_THEME]["TEXT"]
+    MUTED = THEMES[DEFAULT_THEME]["MUTED"]
+    SEMI_MUTED = THEMES[DEFAULT_THEME]["SEMI_MUTED"]
+    ERROR = THEMES[DEFAULT_THEME]["ERROR"]
+    SUCCESS = THEMES[DEFAULT_THEME]["SUCCESS"]
+    WARNING = THEMES[DEFAULT_THEME]["WARNING"]
+    STYLE = THEMES[DEFAULT_THEME].get("_style", "flat")
+
+
+def apply_theme(name):
+    """将指定主题色值应用到 Theme 类属性"""
+    t = THEMES.get(name) or THEMES[DEFAULT_THEME]
+    for k, v in t.items():
+        if k.startswith("_"):
+            continue
+        setattr(Theme, k, v)
+    setattr(Theme, "STYLE", t.get("_style", "flat"))
+
+
+AGUI_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".agui")
+AGUI_CONFIG_PATH = os.path.join(AGUI_CONFIG_DIR, "agui_config.json")
+LEGACY_HISTORY_PATH = os.path.join(AGUI_CONFIG_DIR, "save_paths.json")
+
+
+def load_config():
+    """读取 agui_config.json，首次自动迁移旧 save_paths.json"""
+    try:
+        if os.path.exists(AGUI_CONFIG_PATH):
+            with open(AGUI_CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    result = {"theme": DEFAULT_THEME, "save_paths": {"recent": [], "starred": []}}
+    try:
+        if os.path.exists(LEGACY_HISTORY_PATH):
+            with open(LEGACY_HISTORY_PATH, "r", encoding="utf-8") as f:
+                old = json.load(f)
+            if isinstance(old, dict):
+                result["save_paths"] = {
+                    "recent": list(old.get("recent", []))[:20],
+                    "starred": list(old.get("starred", [])),
+                }
+    except Exception:
+        pass
+    return result
+
+
+def save_config(cfg):
+    """写入 agui_config.json"""
+    try:
+        os.makedirs(AGUI_CONFIG_DIR, exist_ok=True)
+        with open(AGUI_CONFIG_PATH, "w", encoding="utf-8", newline="") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 # === Aria2 默认配置 ===
 def get_default_aria2_args(base_path):
@@ -134,7 +232,6 @@ UI_ARG_PREFIXES = (
     "--retry-exhausted-timeout",
     "--query",
     "--kill",
-    "--gid",
     "--callback-port",
     "--http-port",
     "-silent",

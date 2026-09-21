@@ -95,7 +95,6 @@ python main.py --metalink="<base64编码的meta4内容>"
 - **Windows 优先**：部分功能（Job Object、防火墙、`os.startfile`）依赖 Windows API，Linux/macOS 未测试
 - **`--query` / `--kill` 依赖主实例**：需先启动一个主实例，再从另一终端查询
 - **HTTP API 的 countdown 参数暂未生效**：请走命令行方式
-- **`--gid` 参数未实现**：写入被忽略
 
 详见 [docs/CLI.md 已知坑](docs/CLI.md)。
 

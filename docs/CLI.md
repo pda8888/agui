@@ -52,7 +52,6 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 | --query GID | 查询任务状态。必须带 --callback-port |
 | --kill GID | 强制移除任务。必须带 --callback-port |
 | -h / --help / /? | 帮助 |
-| --gid GID | 指定任务 GID（当前未实现） |
 | --rpc-listen-port N | 指定 aria2c RPC 端口（一般不需要） |
 
 ### 2.3 透传参数
@@ -220,7 +219,6 @@ method 取值为 add / query / kill。
         "title": "批次1",
         "dir": "D:\\Downloads",
         "out": "自定义文件名.zip",
-        "gid": "用户指定GID",
         "auto-referer": true,
         "no-cancel": false,
         "aria2_opts": {
@@ -354,31 +352,27 @@ agui-YYYY-MM-DD-HH-MM.log
 
    见 5.4。
 
-3. --gid 参数未实现
-
-   arg_parser 会解析，但 ui_download 里写入 opts["gid"] 的代码被注释掉。当前传入无效。
-
-4. --title 需要 JSON 转义信息部分
+3. --title 需要 JSON 转义信息部分
 
    --title "标题|说明" 中说明部分若含双引号，需按 JSON 规则转义。简单场景不用管。
 
-5. metalink 多文件任务在 UI 上只对应 1 张卡
+4. metalink 多文件任务在 UI 上只对应 1 张卡
 
    组内所有 GID 由一个"组长 GID"代表。--query <非组长 GID> 会正常返回，但 UI 层不展示该卡。建议主程序通过 --query <组长 GID> 查询，组长 GID 是 add 返回的那个。
 
-6. --no-cancel 会锁死窗口
+5. --no-cancel 会锁死窗口
 
    任务未完成时无法关闭窗口、无法点卡片 X。主程序慎用。
 
-7. 回调端口重入
+6. 回调端口重入
 
    一次 agui 调用只回一次 callback。若主程序发送多个任务给同一 agui（HTTP 模式），每个 add 请求的响应走 HTTP 响应，不走 callback。
 
-8. -silent 模式不显示任何窗口
+7. -silent 模式不显示任何窗口
 
    -silent 用于后台常驻，无 GUI。如需观察任务进度，请通过 HTTP query 或省略 -silent。
 
-9. IPC 端口冲突
+8. IPC 端口冲突
 
    若上一轮 agui 未干净退出，19811 会被占用，新启动的进程被当作从实例转发后退出，表现为"启动无反应"。排查：
 

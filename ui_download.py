@@ -187,48 +187,65 @@ class Aria2GUI(ctk.CTkToplevel):
         self.bind("<FocusOut>", lambda _e: self._cancel_drag(), add="+")
 
     def _update_layout(self):
-        """动态更新窗口高度（固定基础高度 + 错误行动态增量）"""
+        """动态更新窗口高度（按卡片实测高度累加）"""
         with self.tasks_lock:
             tasks_snapshot = list(self.tasks.values())
         count = len(tasks_snapshot)
         self.title(f"{self.base_title} - 多任务下载中 ({count})" if count > 1 else self.base_title)
-        
-        # 先强制刷新任务容器内所有卡的布局，确保错误文本已绘制，行数准确
-        self.task_container.update_idletasks()
-        
-        # 基础高度：Header (≈45) + 上边距10 + 下边距5 + Footer (≈20) = 80，取稳定值
+
+        # 先强制刷新布局，确保 winfo_reqheight 拿到真值
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+
+        # 获取 DPI 缩放，用于物理像素 → 逻辑像素换算
+        sc = 1.0
+        try:
+            import customtkinter as _ctk
+            _s = _ctk.ScalingTracker.get_window_scaling(self)
+            if _s and _s > 0:
+                sc = _s
+        except Exception:
+            sc = 1.0
+
+        # 基础高度：Header + 边距
         total_h = 80
-        
-        # 累加每个任务卡片的高度
+        CARD_GAP = 10
+
         for task in tasks_snapshot:
-            # 固定基础：无标题卡片约 100px，有标题约 130px
-            if task.get("task_title"):
-                card_h = 130
-            else:
-                card_h = 100
-            
-            # 如果错误行可见，根据错误文本行数增加高度（每行约 20px）
+            ui = task.get("ui", {})
+            frame = ui.get("frame")
+            card_h = None
+            if frame is not None:
+                try:
+                    if frame.winfo_exists():
+                        frame.update_idletasks()
+                        card_h = frame.winfo_reqheight() / sc
+                except Exception:
+                    card_h = None
+            if card_h is None:
+                card_h = 130 if task.get("task_title") else 100
             if task.get("error_visible"):
-                lbl = task["ui"]["lbl_error"]
-                # 获取错误标签的当前文本并估算行数
-                text = lbl.cget("text") if lbl.winfo_exists() else ""
-                # 简单按字符宽度除60（英文）或30（中文）估算，或直接取实际换行数
-                # 这里使用 tkinter 的 count 方法获取行数（支持\n）
-                lines = text.count('\n') + 1
-                # 每行增高约 18-22px，取20，并加少许内边距
-                card_h += lines * 20 + 4
-                
-            total_h += card_h
-        
-        # 限制高度范围
+                lbl = ui.get("lbl_error")
+                if lbl is not None:
+                    try:
+                        if lbl.winfo_exists():
+                            text = lbl.cget("text") or ""
+                            nlines = text.count("\n") + 1
+                            card_h += nlines * 20 + 4
+                    except Exception:
+                        pass
+            total_h += card_h + CARD_GAP
+
         target_h = max(160, total_h)
-        target_h = min(800, target_h)
+        target_h = min(1200, target_h)
         target_w = 640
-        
+
         if not self.is_position_set:
-            wx0, wy0, ww, wh, sc = get_work_area_and_scaling(self)
-            phys_w = int(target_w * sc)
-            phys_h = int(target_h * sc)
+            wx0, wy0, ww, wh, _sc2 = get_work_area_and_scaling(self)
+            phys_w = int(target_w * _sc2)
+            phys_h = int(target_h * _sc2)
             x = wx0 + (ww - phys_w) // 2
             y = wy0 + (wh - phys_h) // 2
             if self.position_offset:
@@ -238,7 +255,7 @@ class Aria2GUI(ctk.CTkToplevel):
             self.is_position_set = True
         else:
             self.geometry(f"{target_w}x{target_h}")
-            
+
     def _ipc_handler(self, args):
         """IPC消息处理（在监听线程中同步调用），返回要发送给客户端的字节或 None"""
         # 如果是显示界面命令，异步处理，不返回数据
@@ -623,18 +640,17 @@ class Aria2GUI(ctk.CTkToplevel):
         # 超时：返回最后一次已知状态
         return False, 0, "timeout waiting for totalLength"
 
-    def _add_task_from_args(self, args_list, explicit_title=None):
+    def _prepare_task(self, args_list, explicit_title=None):
+        """统一解析任务参数，返回 dict 或 None"""
         urls, out_name = extract_urls_and_out(args_list)
         b64_metalinks = self._extract_metalink_b64(args_list)
         if not urls and not b64_metalinks:
-            return
+            return None
         task_no_cancel = "--no-cancel" in args_list
         opts = get_task_options(args_list)
         task_countdown, _global_cd = self._parse_countdown_args(args_list)
         if task_countdown is None:
             task_countdown = self.config.get("countdown")
-        if _global_cd is not None:
-            self._apply_global_countdown(_global_cd)
         task_title = explicit_title
         if not task_title:
             for i, arg in enumerate(args_list):
@@ -642,8 +658,6 @@ class Aria2GUI(ctk.CTkToplevel):
                     t, info = parse_custom_t_arg(args_list[i + 1] if arg == "--title" else arg.split("=", 1)[1])
                     task_title = f"{t}: {info}" if info else t
                     break
-        for _b64 in b64_metalinks:
-            self._register_metalink_task(_b64, "Metalink 任务", task_no_cancel, task_title, task_countdown, opts)
         if out_name and out_name != "download" and "out" not in opts:
             opts["out"] = out_name
         save_dir = opts.get("dir", os.getcwd())
@@ -651,11 +665,10 @@ class Aria2GUI(ctk.CTkToplevel):
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir, exist_ok=True)
             opts["dir"] = get_long_path_win32(save_dir)
-        except:
+        except Exception:
             opts["dir"] = save_dir
         if "file-allocation" not in opts:
             opts["file-allocation"] = "none"
-        
         torrents, metalinks, magnets, http_mirrors = [], [], [], []
         for u in urls:
             low = u.lower()
@@ -667,172 +680,185 @@ class Aria2GUI(ctk.CTkToplevel):
                 magnets.append(u)
             else:
                 http_mirrors.append(u)
-        for t_path in torrents:
-            try:
-                with open(t_path, "rb") as f:
-                    content = base64.b64encode(f.read()).decode("utf-8")
-                res = self.rpc.add_torrent(content, [], opts)
-                if res and "result" in res:
-                    self._register_task(res["result"], os.path.basename(t_path), task_no_cancel, task_title=task_title, countdown=task_countdown)
-            except:
-                pass
-        for m_path in metalinks:
-            try:
-                with open(m_path, "rb") as f:
-                    content = base64.b64encode(f.read()).decode("utf-8")
-                res = self.rpc.add_metalink(content, opts)
-                if res and "result" in res:
-                    mh_map = parse_metalink_hashes(m_path)
-                    file_names = list(mh_map.keys())
-                    gids = res["result"]
-                    if isinstance(gids, str):
-                        gids = [gids]
-                    if task_title:
-                        initial_name = task_title
-                    elif file_names:
-                        initial_name = file_names[0]
-                    else:
-                        initial_name = os.path.basename(m_path)
-                    self._register_task(
-                        gids[0], initial_name, task_no_cancel,
-                        task_title=task_title, meta_hash_map=mh_map,
-                        group_gids=gids, group_files=file_names,
-                        placeholder_name=(not file_names),
-                        countdown=task_countdown,
-                    )
-                elif res and "error" in res:
-                    msg = res["error"].get("message", "未知错误")
-                    messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{msg}")
-            except Exception as e:
-                messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{e}")
-        for m in magnets:
+        return {
+            "urls": urls,
+            "b64_metalinks": b64_metalinks,
+            "torrents": torrents,
+            "metalinks": metalinks,
+            "magnets": magnets,
+            "http_mirrors": http_mirrors,
+            "opts": opts,
+            "task_no_cancel": task_no_cancel,
+            "task_title": task_title,
+            "task_countdown": task_countdown,
+            "_global_cd": _global_cd,
+        }
+
+    def _rpc_add_torrent(self, t_path, opts):
+        """添加 torrent，返回 gid 或 None"""
+        try:
+            with open(t_path, "rb") as f:
+                content = base64.b64encode(f.read()).decode("utf-8")
+            res = self.rpc.add_torrent(content, [], opts)
+            if res and "result" in res:
+                return res["result"]
+        except Exception:
+            pass
+        return None
+
+    def _rpc_add_metalink_file(self, m_path, opts):
+        """添加 metalink 文件，返回 dict 或 None"""
+        try:
+            with open(m_path, "rb") as f:
+                content = base64.b64encode(f.read()).decode("utf-8")
+            res = self.rpc.add_metalink(content, opts)
+            if res and "result" in res:
+                mh_map = parse_metalink_hashes(m_path)
+                file_names = list(mh_map.keys())
+                gids = res["result"]
+                if isinstance(gids, str):
+                    gids = [gids]
+                return {"gids": gids, "mh_map": mh_map, "file_names": file_names}
+            if res and "error" in res:
+                msg = res["error"].get("message", "未知错误")
+                messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{msg}")
+        except Exception as e:
+            messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{e}")
+        return None
+
+    def _rpc_add_magnet(self, m, opts):
+        """添加 magnet，返回 gid 或 None"""
+        try:
             res = self.rpc.add_uri([m], opts)
             if res and "result" in res:
-                self._register_task(res["result"], "Magnet 任务", task_no_cancel, [m], opts, 0, task_title=task_title, placeholder_name=True, countdown=task_countdown)
-        if http_mirrors:
+                return res["result"]
+        except Exception:
+            pass
+        return None
+
+    def _rpc_add_http_mirrors(self, http_mirrors, opts):
+        """添加 HTTP 多源，返回 gid 或 None"""
+        try:
             res = self.rpc.add_uri(http_mirrors, opts)
             if res and "result" in res:
-                name = opts.get("out") or os.path.basename(urlparse(http_mirrors[0]).path) or "下载任务"
-                self._register_task(res["result"], unquote(name), task_no_cancel, http_mirrors, opts, 0, task_title=task_title, countdown=task_countdown)
+                return res["result"]
+        except Exception:
+            pass
+        return None
+
+    def _add_task_from_args(self, args_list, explicit_title=None):
+        p = self._prepare_task(args_list, explicit_title)
+        if p is None:
+            return
+        if p["_global_cd"] is not None:
+            self._apply_global_countdown(p["_global_cd"])
+        opts = p["opts"]
+        no_cancel = p["task_no_cancel"]
+        title = p["task_title"]
+        cd = p["task_countdown"]
+        for b64 in p["b64_metalinks"]:
+            self._register_metalink_task(b64, "Metalink 任务", no_cancel, title, cd, opts)
+        for t_path in p["torrents"]:
+            gid = self._rpc_add_torrent(t_path, opts)
+            if gid:
+                self._register_task(gid, os.path.basename(t_path), no_cancel,
+                                    task_title=title, countdown=cd)
+        for m_path in p["metalinks"]:
+            r = self._rpc_add_metalink_file(m_path, opts)
+            if r is None:
+                continue
+            gids = r["gids"]
+            mh_map = r["mh_map"]
+            file_names = r["file_names"]
+            if title:
+                initial_name = title
+            elif file_names:
+                initial_name = file_names[0]
+            else:
+                initial_name = os.path.basename(m_path)
+            self._register_task(
+                gids[0], initial_name, no_cancel,
+                task_title=title, meta_hash_map=mh_map,
+                group_gids=gids, group_files=file_names,
+                placeholder_name=(not file_names),
+                countdown=cd,
+            )
+        for m in p["magnets"]:
+            gid = self._rpc_add_magnet(m, opts)
+            if gid:
+                self._register_task(gid, "Magnet 任务", no_cancel, [m], opts, 0,
+                                    task_title=title, placeholder_name=True, countdown=cd)
+        if p["http_mirrors"]:
+            gid = self._rpc_add_http_mirrors(p["http_mirrors"], opts)
+            if gid:
+                name = opts.get("out") or os.path.basename(urlparse(p["http_mirrors"][0]).path) or "下载任务"
+                self._register_task(gid, unquote(name), no_cancel, p["http_mirrors"], opts, 0,
+                                    task_title=title, countdown=cd)
 
     def _add_task_sync(self, args_list):
-        """同步添加任务，返回 aria2 GID（无 UI 操作）"""
-        urls, out_name = extract_urls_and_out(args_list)
-        b64_metalinks = self._extract_metalink_b64(args_list)
-        if not urls and not b64_metalinks:
+        """同步添加任务，返回首个 aria2 GID（无 UI 操作，异步注册 UI）"""
+        p = self._prepare_task(args_list)
+        if p is None:
             return None
-        
-        opts = get_task_options(args_list)
-        task_countdown, _global_cd = self._parse_countdown_args(args_list)
-        if task_countdown is None:
-            task_countdown = self.config.get("countdown")
-        if _global_cd is not None:
-            self.after(0, self._apply_global_countdown, _global_cd)
-        
-        # 解析 --title 参数
-        task_title = None
-        for i, arg in enumerate(args_list):
-            if arg == "--title" and i + 1 < len(args_list):
-                t, info = parse_custom_t_arg(args_list[i + 1])
-                task_title = f"{t}: {info}" if info else t
+        if p["_global_cd"] is not None:
+            self.after(0, self._apply_global_countdown, p["_global_cd"])
+        opts = p["opts"]
+        no_cancel = p["task_no_cancel"]
+        title = p["task_title"]
+        cd = p["task_countdown"]
+        first_gid = None
+        for b64 in p["b64_metalinks"]:
+            g = self._register_metalink_task(b64, "Metalink 任务", no_cancel, title, cd, opts)
+            if g and first_gid is None:
+                first_gid = g
+        if first_gid is None:
+            for t_path in p["torrents"]:
+                gid = self._rpc_add_torrent(t_path, opts)
+                if gid:
+                    first_gid = gid
+                    n = os.path.basename(t_path)
+                    self.after(0, lambda g=gid, nm=n, nc=no_cancel, tt=title, c=cd:
+                               self._register_task(g, nm, nc, None, None, 0, tt, countdown=c))
+                    break
+        if first_gid is None:
+            for m_path in p["metalinks"]:
+                r = self._rpc_add_metalink_file(m_path, opts)
+                if r is None:
+                    continue
+                gids = r["gids"]
+                mh_map = r["mh_map"]
+                file_names = r["file_names"]
+                if title:
+                    initial_name = title
+                elif file_names:
+                    initial_name = file_names[0]
+                else:
+                    initial_name = os.path.basename(m_path)
+                first_gid = gids[0]
+                def _reg(gs=gids, n=initial_name, mm=mh_map, nc=no_cancel, tt=title, fn=file_names, c=cd):
+                    self._register_task(gs[0], n, nc, None, None, 0, tt, None, mm,
+                                        placeholder_name=(not fn),
+                                        group_gids=gs, group_files=fn, countdown=c)
+                self.after(0, _reg)
                 break
-            elif arg.startswith("--title="):
-                t, info = parse_custom_t_arg(arg.split("=", 1)[1])
-                task_title = f"{t}: {info}" if info else t
-                break
-        if out_name and out_name != "download" and "out" not in opts:
-            opts["out"] = out_name
-        save_dir = opts.get("dir", os.getcwd())
-        try:
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir, exist_ok=True)
-            opts["dir"] = get_long_path_win32(save_dir)
-        except:
-            opts["dir"] = save_dir
-        if "file-allocation" not in opts:
-            opts["file-allocation"] = "none"
-            
-        torrents, metalinks, magnets, http_mirrors = [], [], [], []
-        for u in urls:
-            low = u.lower()
-            if low.endswith(".torrent") and os.path.isfile(u):
-                torrents.append(u)
-            elif (low.endswith(".meta4") or low.endswith(".metalink")) and os.path.isfile(u):
-                metalinks.append(u)
-            elif low.startswith("magnet:"):
-                magnets.append(u)
-            else:
-                http_mirrors.append(u)
-        
-        gid = None
-        for t_path in torrents:
-            try:
-                with open(t_path, "rb") as f:
-                    content = base64.b64encode(f.read()).decode("utf-8")
-                res = self.rpc.add_torrent(content, [], opts)
-                if res and "result" in res:
-                    gid = res["result"]
-                    # 异步注册 UI
-                    self.after(0, lambda g=gid, n=os.path.basename(t_path), cd=task_countdown:
-                               self._register_task(g, n, "--no-cancel" in args_list, None, None, 0, task_title, countdown=cd))
+        if first_gid is None:
+            for m in p["magnets"]:
+                gid = self._rpc_add_magnet(m, opts)
+                if gid:
+                    first_gid = gid
+                    self.after(0, lambda g=gid, mm=m, oo=opts, nc=no_cancel, c=cd:
+                               self._register_task(g, "Magnet 任务", nc, [mm], oo, 0, None, None, None, True, countdown=c))
                     break
-            except:
-                pass
-        if not gid:
-            for m_path in metalinks:
-                try:
-                    with open(m_path, "rb") as f:
-                        content = base64.b64encode(f.read()).decode("utf-8")
-                    res = self.rpc.add_metalink(content, opts)
-                    if res and "result" in res:
-                        mh_map = parse_metalink_hashes(m_path)
-                        file_names = list(mh_map.keys())
-                        gids = res["result"]
-                        if isinstance(gids, str):
-                            gids = [gids]
-                        if task_title:
-                            initial_name = task_title
-                        elif file_names:
-                            initial_name = file_names[0]
-                        else:
-                            initial_name = os.path.basename(m_path)
-                        _nc = "--no-cancel" in args_list
-                        _tt = task_title
-                        def _reg_leader(gs=gids, n=initial_name, mm=mh_map, nc=_nc, tt=_tt, fn=file_names, cd=task_countdown):
-                            self._register_task(
-                                gs[0], n, nc, None, None, 0, tt, None, mm,
-                                placeholder_name=(not fn),
-                                group_gids=gs, group_files=fn,
-                                countdown=cd,
-                            )
-                        self.after(0, _reg_leader)
-                        if gids:
-                            gid = gids[0]
-                            break
-                except:
-                    pass
-        if not gid:
-            for _b64 in b64_metalinks:
-                _g = self._register_metalink_task(_b64, "Metalink 任务", "--no-cancel" in args_list, task_title, task_countdown, opts)
-                if _g:
-                    gid = _g
-                    break
-        if not gid:
-            for m in magnets:
-                res = self.rpc.add_uri([m], opts)
-                if res and "result" in res:
-                    gid = res["result"]
-                    self.after(0, lambda g=gid, mm=m, oo=opts, cd=task_countdown:
-                               self._register_task(g, "Magnet 任务", "--no-cancel" in args_list, [mm], oo, 0, None, None, None, True, countdown=cd))
-                    break
-        if not gid and http_mirrors:
-            res = self.rpc.add_uri(http_mirrors, opts)
-            if res and "result" in res:
-                gid = res["result"]
-                name = opts.get("out") or os.path.basename(urlparse(http_mirrors[0]).path) or "下载任务"
-                self.after(0, lambda g=gid, n=unquote(name), hm=http_mirrors, oo=opts, cd=task_countdown:
-                           self._register_task(g, n, "--no-cancel" in args_list, hm, oo, 0, task_title, countdown=cd))
-        return gid
+        if first_gid is None and p["http_mirrors"]:
+            gid = self._rpc_add_http_mirrors(p["http_mirrors"], opts)
+            if gid:
+                first_gid = gid
+                name = opts.get("out") or os.path.basename(urlparse(p["http_mirrors"][0]).path) or "下载任务"
+                nm = unquote(name)
+                hm = p["http_mirrors"]
+                self.after(0, lambda g=gid, n=nm, hm2=hm, oo=opts, nc=no_cancel, tt=title, c=cd:
+                           self._register_task(g, n, nc, hm2, oo, 0, tt, countdown=c))
+        return first_gid
 
     def _register_task(self, gid, name, no_cancel=False, raw_uris=None, raw_opts=None, retry_count=0, task_title=None, meta_hash=None, meta_hash_map=None, placeholder_name=False, group_gids=None, group_files=None, countdown=None):
         with self.tasks_lock:
@@ -889,10 +915,10 @@ class Aria2GUI(ctk.CTkToplevel):
         _is_cyber = (getattr(Theme, "STYLE", "flat") == "cyber")
         if _is_cyber:
             stripe = ctk.CTkFrame(frame, fg_color=Theme.ACCENT, width=4,
-                                   corner_radius=0)
+                                   height=1, corner_radius=0)
             stripe.pack(side="left", fill="y")
             inner = ctk.CTkFrame(frame, fg_color="transparent")
-            inner.pack(side="left", fill="both", expand=True, padx=14, pady=10)
+            inner.pack(fill="both", expand=True, padx=(18, 14), pady=10)
         else:
             inner = ctk.CTkFrame(frame, fg_color="transparent")
             inner.pack(fill="both", expand=True, padx=14, pady=10)

@@ -12,7 +12,6 @@ env/
 # 构建产物
 build/
 dist/
-*.spec
 *.manifest
 
 # aria2 内核

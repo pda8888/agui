@@ -30,6 +30,11 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         self.initial_log_file = initial_log_file
         self.auto_referer_init = auto_referer   # 保存命令行传入的初始值
         self.current_tab = "link"
+        try:
+            from config import load_config as _lc
+            self._current_theme = _lc().get("theme") or "midnight"
+        except Exception:
+            self._current_theme = "midnight"
         self._history = self._load_history()
         self._history_popup = None
         self._initial_positioned = False
@@ -274,6 +279,8 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
                       width=100).pack(side="right", padx=(10, 0))
         create_button(bottom, text="取消", command=self.destroy,
                       width=100, style="secondary").pack(side="right")
+        create_button(bottom, text="\u25d0 切换皮肤", command=self._cycle_theme,
+                      width=120, style="secondary").pack(side="left", padx=(15, 0))
     
     # --- 核心修改区域：参数行对齐 ---
     # 定义标准列宽，实现表格化对齐
@@ -372,28 +379,50 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         
         create_label(frame, "(0=无)", color=Theme.MUTED, font_size=11).pack(side="left")
     
-    def _history_file(self):
-        d = os.path.join(os.path.expanduser("~"), ".agui")
+    def _cycle_theme(self):
         try:
-            os.makedirs(d, exist_ok=True)
+            from config import THEMES, load_config, save_config
+        except Exception:
+            return
+        names = list(THEMES.keys())
+        if not names:
+            return
+        cur = getattr(self, "_current_theme", "midnight")
+        try:
+            idx = names.index(cur)
+        except ValueError:
+            idx = -1
+        nxt = names[(idx + 1) % len(names)]
+        try:
+            cfg = load_config()
+            cfg["theme"] = nxt
+            save_config(cfg)
+            self._current_theme = nxt
         except Exception:
             pass
-        return os.path.join(d, "save_paths.json")
+        try:
+            from tkinter import messagebox
+            messagebox.showinfo("提示", f"皮肤已保存为 {nxt}，重启后生效")
+        except Exception:
+            pass
 
     def _load_history(self):
         try:
-            with open(self._history_file(), "r", encoding="utf-8") as f:
-                data = json.load(f)
-            recent = data.get("recent", []) if isinstance(data, dict) else []
-            starred = data.get("starred", []) if isinstance(data, dict) else []
+            from config import load_config
+            cfg = load_config()
+            sp = cfg.get("save_paths") or {}
+            recent = sp.get("recent", []) if isinstance(sp, dict) else []
+            starred = sp.get("starred", []) if isinstance(sp, dict) else []
             return {"recent": list(recent)[:20], "starred": list(starred)}
         except Exception:
             return {"recent": [], "starred": []}
 
     def _save_history(self):
         try:
-            with open(self._history_file(), "w", encoding="utf-8", newline="") as f:
-                json.dump(self._history, f, ensure_ascii=False, indent=2)
+            from config import load_config, save_config
+            cfg = load_config()
+            cfg["save_paths"] = dict(self._history)
+            save_config(cfg)
         except Exception:
             pass
 

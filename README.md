@@ -1,3 +1,4 @@
+[English](docs/README.en.md) | 中文
 # 老王的小拖船
 
 一个基于 aria2c 的超轻量下载器。Windows 优先，内存 < 30 MB，启动 < 1 秒，无 Electron，无浏览器内核。

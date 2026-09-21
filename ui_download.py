@@ -83,6 +83,7 @@ class Aria2GUI(ctk.CTkToplevel):
             self._current_theme = "midnight"
         self._tick_started = False
         self._theme_menu_win = None
+        self._theme_fg_id = None
         
         secret = next(
             (a.split("=", 1)[1] for a in config["aria2_args"] if a.startswith("--rpc-secret=")),
@@ -1547,8 +1548,36 @@ class Aria2GUI(ctk.CTkToplevel):
         except Exception:
             pass
         self._theme_menu_win = top
+        if getattr(self, "_theme_fg_id", None):
+            try:
+                self.after_cancel(self._theme_fg_id)
+            except Exception:
+                pass
+        self._theme_fg_id = self.after(300, self._poll_theme_fg)
+
+    def _poll_theme_fg(self):
+        self._theme_fg_id = None
+        if getattr(self, "_theme_menu_win", None) is None:
+            return
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            pid = ctypes.c_ulong(0)
+            ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value != os.getpid():
+                self._close_theme_menu()
+                return
+        except Exception:
+            pass
+        self._theme_fg_id = self.after(300, self._poll_theme_fg)
 
     def _close_theme_menu(self):
+        if getattr(self, "_theme_fg_id", None):
+            try:
+                self.after_cancel(self._theme_fg_id)
+            except Exception:
+                pass
+            self._theme_fg_id = None
         w = getattr(self, "_theme_menu_win", None)
         if w is not None:
             try:
@@ -1575,7 +1604,10 @@ class Aria2GUI(ctk.CTkToplevel):
             y = self.winfo_y()
         except Exception:
             x = y = None
-        self._close_theme_menu()
+        try:
+            self._close_theme_menu()
+        except Exception:
+            pass
         try:
             self._do_hide_info()
         except Exception:
@@ -1592,6 +1624,10 @@ class Aria2GUI(ctk.CTkToplevel):
             items = list(self.tasks.items())
         for _gid, _task in items:
             _task["ui"] = {}
+        try:
+            self.configure(fg_color=Theme.BG)
+        except Exception:
+            pass
         self._build_ui()
         for gid, task in items:
             try:

@@ -77,6 +77,7 @@ python main.py --metalink="<base64编码的meta4内容>"
 - `utils.py` — 工具函数
 - `ui_config.py` — 配置界面
 - `ui_download.py` — 下载监控主界面
+- `info_overlay.py` — 任务详情浮层
 - `ui_styles.py` — UI 样式工厂
 - `ui_help.py` — 帮助窗口
 - `docs/CLI.md` — CLI / API 调用手册

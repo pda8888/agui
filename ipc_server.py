@@ -40,14 +40,16 @@ def try_bind_ipc_port():
 class IPCServer:
     """IPC服务器,接收其他实例的任务，支持返回结果"""
     
-    def __init__(self, socket_obj, handler):
+    def __init__(self, socket_obj, handler, log_path=None):
         """
         socket_obj: 已绑定的socket对象
         handler: 数据处理函数，接收参数列表，返回 bytes 或 None
+        log_path: 可选日志路径，服务器异常退出时写入
         """
         self.socket = socket_obj
         self.handler = handler
         self.running = True
+        self.log_path = log_path
     
     def start(self):
         """启动监听(在独立线程中调用)"""
@@ -71,10 +73,11 @@ class IPCServer:
                             if reply:
                                 client.sendall(reply)
                     client.close()
-                except:
+                except Exception:
                     pass
-        except:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_path, f"IPC server stopped: {e}")
     
     def stop(self):
         """停止监听"""

@@ -229,7 +229,8 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         self.file_allocation = ctk.CTkComboBox(
             pr1, values=["none", "prealloc", "trunc", "falloc"],
             state="readonly", font=FONT_SMALL, width=100, height=26,
-            fg_color="#2d3748", border_color=Theme.MUTED, button_color=Theme.ACCENT,
+            fg_color="#2d3748", border_color=Theme.MUTED, border_width=1,
+            button_color=Theme.ACCENT,
         )
         self.file_allocation.set(self.prefs.get("file_allocation", "falloc"))
         self.file_allocation.pack(side="left")
@@ -261,7 +262,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             log_row, text="记录日志", variable=self.log_enabled_var,
             text_color=Theme.TEXT, font=FONT_NORMAL,
             fg_color=Theme.ACCENT, hover_color=Theme.ACCENT_LIGHT,
-            corner_radius=4, border_width=2,
+            corner_radius=4, border_width=1,
             checkbox_width=20, checkbox_height=20,
         ).pack(side="left")
         _initial_name = os.path.basename(self.initial_log_file) if self.initial_log_file else ""
@@ -279,7 +280,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             bottom, text="高级选项", variable=self.advanced_var,
             text_color=Theme.TEXT, font=FONT_NORMAL,
             fg_color=Theme.ACCENT, hover_color=Theme.ACCENT_LIGHT,
-            corner_radius=4, border_width=2,
+            corner_radius=4, border_width=1,
             checkbox_width=20, checkbox_height=20,
             command=self._toggle_advanced,
         ).pack(side="left")
@@ -299,12 +300,6 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
                 self.advanced_container.pack(fill="x")
             except Exception:
                 pass
-    
-    # --- 核心修改区域：参数行对齐 ---
-    # 定义标准列宽，实现表格化对齐
-    # COL1_W: 第一列标签宽度 (针对 "最大连接数:", "RPC端口:", "文件分配:")
-    # COL2_W: 第二列标签宽度 (针对 "分片数:", "最小分片:")
-    # COL3_W: 第三列标签宽度 (针对 "速度限制:")
     
     def _switch_tab(self, key):
         self.current_tab = key
@@ -335,68 +330,6 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             pass
         self.after(30, self._apply_dynamic_height)
 
-    def _build_param_row1(self, parent):
-        frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.pack(fill="x", padx=0, pady=5)
-        
-        # 第一列: 最大连接数
-        create_label(frame, "最大连接数:", width=90, anchor="e").pack(side="left", padx=(0, 5))
-        self.max_conn = create_spinbox(frame, initial=16, width=60)
-        self.max_conn.pack(side="left")
-        
-        # 间距
-        ctk.CTkFrame(frame, width=20, height=1, fg_color="transparent").pack(side="left")
-        
-        # 第二列: 分片数
-        create_label(frame, "分片数:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.split = create_spinbox(frame, initial=5, width=60)
-        self.split.pack(side="left")
-        
-        # 间距
-        ctk.CTkFrame(frame, width=20, height=1, fg_color="transparent").pack(side="left")
-
-        # 第三列: 文件分配 (从原第三行移来)
-        # 使用 width=70 与下方 "速度限制" 对齐
-        create_label(frame, "文件分配:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.file_allocation = ctk.CTkComboBox(
-            frame, values=["none", "prealloc", "trunc", "falloc"],
-            state="readonly", font=FONT_SMALL, width=100, height=26, # <--- 高度改为26
-            fg_color="#2d3748", border_color=Theme.MUTED, button_color=Theme.ACCENT,
-        )
-        self.file_allocation.set("falloc")
-        self.file_allocation.pack(side="left") # 已经是最后，不需要padx
-        
-        create_label(frame, "(推荐 falloc)", color=Theme.MUTED, font_size=11).pack(side="left", padx=(5,0))
-
-    def _build_param_row2(self, parent):
-        frame = ctk.CTkFrame(parent, fg_color="transparent")
-        frame.pack(fill="x", padx=0, pady=5)
-        
-        # 第一列: RPC端口
-        create_label(frame, "RPC端口:", width=90, anchor="e").pack(side="left", padx=(0, 5))
-        self.rpc_port = create_spinbox(frame, initial=16800, width=60)
-        self.rpc_port.pack(side="left")
-        
-        # 间距
-        ctk.CTkFrame(frame, width=20, height=1, fg_color="transparent").pack(side="left")
-        
-        # 第二列: 最小分片
-        create_label(frame, "最小分片:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.min_split_size = create_entry(frame, width=60)
-        self.min_split_size.insert(0, "1M")
-        self.min_split_size.pack(side="left")
-        
-        # 间距
-        ctk.CTkFrame(frame, width=20, height=1, fg_color="transparent").pack(side="left")
-        
-        # 第三列: 速度限制
-        create_label(frame, "速度限制:", width=70, anchor="e").pack(side="left", padx=(0, 5))
-        self.speed_limit = create_entry(frame, width=60)
-        self.speed_limit.insert(0, "0")
-        self.speed_limit.pack(side="left", padx=(0, 5))
-        
-        create_label(frame, "(0=无)", color=Theme.MUTED, font_size=11).pack(side="left")
-    
     def _show_theme_menu(self):
         if getattr(self, "_theme_menu_win", None) is not None:
             self._close_theme_menu()
@@ -511,10 +444,13 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             pass
 
     def _save_config_only(self):
-        self._save_preferences_from_ui()
+        ok = self._save_preferences_from_ui()
         try:
             from tkinter import messagebox
-            messagebox.showinfo("提示", "配置已保存")
+            if ok:
+                messagebox.showinfo("提示", "配置已保存")
+            else:
+                messagebox.showerror("错误", "配置保存失败，请检查磁盘权限或路径")
         except Exception:
             pass
 
@@ -538,8 +474,9 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             prefs["log_path"] = "" if _cur_lp == _init_lp else _cur_lp
             prefs["advanced"] = bool(self.advanced_var.get())
             save_preferences(prefs)
+            return True
         except Exception:
-            pass
+            return False
 
     def _add_to_history(self, path):
         if not path:

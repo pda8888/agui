@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 任务卡片之间的距离：
-# 找到 frame.pack(fill="x", pady=5)
-# 修改 pady=5：数字越大，任务卡片之间隔得越远。
-# 文件名与进度条的距离：
-# 找到 bar.pack(fill="x", pady=(8, 8))
-# 修改 pady=(8, 8)：第一个数字是进度条上方的间距，第二个是下方的间距。
-# 文件名与上方标题（如果有）的距离：
-# 找到 line1.pack(fill="x", pady=(0, 4))
-# 修改 pady=(0, 4)：第二个数字是文件名下方的间距。
-# 卡片内部上下的总留白：
-# 找到 inner.pack(..., pady=10)
-# 修改 pady=10：数字越大，卡片内部显得越宽松。
-
 """Aria2下载任务监控界面 (动态高度修正版)"""
 import os, json
 import time
@@ -23,7 +10,6 @@ import tkinter as tk
 from tkinter import messagebox
 from urllib.parse import urlparse, unquote
 import customtkinter as ctk
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from config import APP_TITLE, Theme
 from utils import nice_size, nice_duration, extract_urls_and_out, get_long_path_win32, translate_error_online, parse_metalink_hashes, parse_metalink_hashes_from_b64, HashVerifier
@@ -95,7 +81,7 @@ class Aria2GUI(ctk.CTkToplevel):
         self._build_ui()
         
         if server_socket:
-            self.ipc_server = IPCServer(server_socket, self._ipc_handler)
+            self.ipc_server = IPCServer(server_socket, self._ipc_handler, self.log_file)
             threading.Thread(target=self.ipc_server.start, daemon=True).start()
         
         threading.Thread(
@@ -362,258 +348,10 @@ class Aria2GUI(ctk.CTkToplevel):
         self.after(100, lambda: self.attributes('-topmost', False))
 
     def _run_http_server(self):
-        """启动 HTTP API 服务"""
-        gui = self  # 捕获实例供内部类使用
-        # 如果没有指定日志文件，HTTP 模式下默认使用 agui.log
-        if not self.log_file:
-            self.log_file = "agui.log"
+        """启动 HTTP API 服务（委托给 http_server 模块）"""
+        from http_server import run_http_server
+        run_http_server(self, self.http_port, self.log_file)
 
-        class APIHandler(BaseHTTPRequestHandler):
-            def do_POST(self):
-                if self.path != "/api":
-                    self.send_error(404)
-                    return
-                try:
-                    content_length = int(self.headers["Content-Length"])
-                    body = self.rfile.read(content_length)
-                    data = json.loads(body)
-                    method = data.get("method")
-                    params = data.get("params", {})
-
-                    if method == "add":
-                        self._handle_add(params)
-                    elif method == "query":
-                        self._handle_query(params)
-                    elif method == "kill":
-                        self._handle_kill(params)
-                    else:
-                        self._send_json({"status": "failed", "message": "unknown method"})
-                except Exception as e:
-                    self._send_json({"status": "failed", "message": str(e)})
-
-            def _handle_add(self, params):
-                if not isinstance(params, dict):
-                    self._send_json({"status": "failed", "message": "params must be a JSON object"})
-                    return
-
-                # 支持 urls（数组）、url（字符串）、metalink（base64 字符串）
-                metalink_b64 = params.get("metalink")
-                urls = params.get("urls")
-                has_urls = isinstance(urls, list) and len(urls) > 0
-                has_url = isinstance(params.get("url"), str) and bool(params["url"].strip())
-                has_metalink = isinstance(metalink_b64, str) and bool(metalink_b64.strip())
-                if has_urls:
-                    pass
-                elif has_url:
-                    urls = [params["url"]]
-                else:
-                    urls = []
-                if not has_urls and not has_url and not has_metalink:
-                    self._send_json({"status": "failed", "message": "url, urls or metalink is required"})
-                    return
-
-                # ---------- 全局参数：直接更新 gui 实例属性 ----------
-                global_keys = {
-                    "log-to": ("log_file", str),
-                    "retry": ("retry_count", int),
-                    "retry-interval": ("retry_interval", int),
-                    "retry-exhausted-timeout": ("retry_exhausted_timeout", int),
-                    "position": ("position_offset", str),
-                }
-                for key, value in params.items():
-                    if key in global_keys:
-                        attr_name, _type = global_keys[key]
-                        try:
-                            if value is not None:
-                                setattr(gui, attr_name, _type(value))
-                        except Exception:
-                            pass
-
-                # ---------- 任务参数：构建命令行列表 ----------
-                cmd_args = []
-                task_keys_map = {
-                    "title": "--title",
-                    "out": "--out",
-                    "dir": "--dir",
-                    "auto-referer": "--auto-referer",
-                    "no-cancel": "--no-cancel",
-                }
-                for key, flag in task_keys_map.items():
-                    value = params.get(key)
-                    if value is not None:
-                        if isinstance(value, bool) and value:
-                            cmd_args.append(flag)
-                        elif value != "":
-                            cmd_args.append(flag)
-                            cmd_args.append(str(value))
-
-                _cd = params.get("countdown")
-                if _cd is not None and _cd != "":
-                    cmd_args.append("--countdown=" + str(_cd))
-                _gcd = params.get("global-countdown")
-                if _gcd is not None and _gcd != "":
-                    cmd_args.append("--global-countdown=" + str(_gcd))
-
-                if has_metalink:
-                    cmd_args.append("--metalink=" + metalink_b64.strip())
-
-                # 处理 aria2_opts（透传参数）
-                aria2_opts = params.get("aria2_opts", {})
-                if isinstance(aria2_opts, dict):
-                    for k, v in aria2_opts.items():
-                        if v is not None and v != "":
-                            cmd_args.append("--" + k)
-                            cmd_args.append(str(v))
-
-                # 添加所有 URL 作为位置参数
-                for u in urls:
-                    cmd_args.append(u)
-
-                gid = gui._add_task_sync(cmd_args)
-                if gid:
-                    self._send_json({"status": "success", "GID": gid})
-                else:
-                    self._send_json({"status": "failed", "message": "failed to add task"})
-                    
-            def _handle_query(self, params):
-                gid = params.get("gid") if isinstance(params, dict) else None
-                if not gid:
-                    self._send_json({"status": "failed", "message": "gid required"})
-                    return
-                try:
-                    res = gui.rpc.tell_status(gid, [
-                        "status", "totalLength", "completedLength",
-                        "downloadSpeed", "errorMessage", "files"
-                    ])
-                except Exception as e:
-                    # RPC 调用本身出错，检查本地是否有该任务
-                    with gui.tasks_lock:
-                        task = gui.tasks.get(gid)
-                    if task:
-                        self._send_json({
-                            "status": "success",
-                            "data": self._build_fallback_status(task)
-                        })
-                    else:
-                        self._send_json({
-                            "status": "failed",
-                            "message": "task initializing or aria2 not ready, retry later"
-                        })
-                    return
-
-                if res and "result" in res:
-                    result = res["result"]
-                    # 补充下载就绪检查
-                    complete = (
-                        result.get("status") == "complete" and
-                        int(result.get("totalLength", 0)) > 0 and
-                        int(result.get("completedLength", 0)) == int(result.get("totalLength", 0))
-                    )
-                    if complete:
-                        try:
-                            file_path = ""
-                            if "files" in result and result["files"]:
-                                file_path = result["files"][0].get("path", "")
-                            if file_path and os.path.exists(file_path + ".aria2"):
-                                complete = False
-                        except:
-                            pass
-                    result["downloadReady"] = complete
-                    self._send_json({"status": "success", "data": result})
-                else:
-                    # RPC 无结果，检查本地
-                    with gui.tasks_lock:
-                        task = gui.tasks.get(gid)
-                    if task:
-                        self._send_json({
-                            "status": "success",
-                            "data": self._build_fallback_status(task)
-                        })
-                    else:
-                        self._send_json({
-                            "status": "failed",
-                            "message": "task initializing or not found, retry later"
-                        })
-
-            @staticmethod
-            def _build_fallback_status(task):
-                """从本地任务字典构造查询结果（用于 RPC 不可用时的回退）"""
-                st = task.get("status", "unknown")
-                total = str(task.get("frozen_total", 0)) or "0"
-                completed = str(task.get("frozen_done", 0)) or "0"
-                return {
-                    "status": st,
-                    "totalLength": total,
-                    "completedLength": completed,
-                    "downloadSpeed": "0",
-                    "errorMessage": "",
-                    "downloadReady": (st == "complete")
-                }
-                        
-            def _handle_kill(self, params):
-                gid = params.get("gid") if isinstance(params, dict) else None
-                if not gid:
-                    self._send_json({"status": "failed", "message": "gid required"})
-                    return
-                # 检查任务是否存在于 aria2 或本地 tasks 中
-                exists = False
-                with gui.tasks_lock:
-                    _local_exists = gid in gui.tasks
-                if _local_exists:
-                    exists = True
-                else:
-                    # 查询 aria2 确认
-                    res = gui.rpc.tell_status(gid, ["status"])
-                    if res and "result" in res:
-                        exists = True
-                if not exists:
-                    self._send_json({"status": "failed", "message": "gid not found"})
-                    return
-                try:
-                    gui.rpc.force_remove(gid)
-                    gui.rpc.remove_download_result(gid)
-                    gui.after(0, lambda g=gid: self._cleanup_ui(g))
-                    self._send_json({"status": "success", "message": "task killed"})
-                except Exception as e:
-                    self._send_json({"status": "failed", "message": str(e)})
-                    
-            def _cleanup_ui(self, gid):
-                if gid in gui.tasks:
-                    task = gui.tasks[gid]
-                    if task.get("retry_dialog"):
-                        try:
-                            task["retry_dialog"].destroy()
-                        except:
-                            pass
-                    task["ui"]["frame"].destroy()
-                    del gui.tasks[gid]
-                    gui._update_layout()
-                    if len(gui.tasks) == 0:
-                        gui._on_close()
-
-            def _send_json(self, data):
-                response = json.dumps(data, ensure_ascii=False).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.send_header("Content-Length", len(response))
-                self.end_headers()
-                self.wfile.write(response)
-
-            def log_message(self, format, *args):
-                pass  # 禁用 HTTP 访问日志
-
-        try:
-            server = HTTPServer(("127.0.0.1", self.http_port), APIHandler)
-        except OSError as e:
-            from utils import log_write
-            log_write(self.log_file or "agui.log", f"HTTP 端口 {self.http_port} 被占用: {e}")
-            self.after(0, self._on_close)
-            return
-        try:
-            server.serve_forever()
-        except Exception:
-            pass
-    
     def _start_aria2_and_first_task(self, args):
         try:
             self.aria2_proc, ready, stderr = start_aria2c(args, self.log_file)
@@ -709,8 +447,9 @@ class Aria2GUI(ctk.CTkToplevel):
             res = self.rpc.add_torrent(content, [], opts)
             if res and "result" in res:
                 return res["result"]
-        except Exception:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"add_torrent failed: {t_path}: {e}")
         return None
 
     def _rpc_add_metalink_file(self, m_path, opts):
@@ -728,10 +467,16 @@ class Aria2GUI(ctk.CTkToplevel):
                 return {"gids": gids, "mh_map": mh_map, "file_names": file_names}
             if res and "error" in res:
                 msg = res["error"].get("message", "未知错误")
-                messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{msg}")
+                self.after(0, self._show_metalink_error, m_path, msg)
         except Exception as e:
-            messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{e}")
+            self.after(0, self._show_metalink_error, m_path, str(e))
         return None
+
+    def _show_metalink_error(self, m_path, msg):
+        try:
+            messagebox.showerror("Metalink 错误", f"{os.path.basename(m_path)}\n{msg}")
+        except Exception:
+            pass
 
     def _rpc_add_magnet(self, m, opts):
         """添加 magnet，返回 gid 或 None"""
@@ -739,8 +484,9 @@ class Aria2GUI(ctk.CTkToplevel):
             res = self.rpc.add_uri([m], opts)
             if res and "result" in res:
                 return res["result"]
-        except Exception:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"add_magnet failed: {e}")
         return None
 
     def _rpc_add_http_mirrors(self, http_mirrors, opts):
@@ -749,27 +495,39 @@ class Aria2GUI(ctk.CTkToplevel):
             res = self.rpc.add_uri(http_mirrors, opts)
             if res and "result" in res:
                 return res["result"]
-        except Exception:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"add_http_mirrors failed: {e}")
         return None
 
-    def _add_task_from_args(self, args_list, explicit_title=None):
+    def _add_task_sync(self, args_list, explicit_title=None):
+        """统一添加任务入口：全量添加 + 类型累加。返回首个成功 gid 或 None。
+        非主线程可调用，UI 注册通过 after(0, ...) 调度。"""
         p = self._prepare_task(args_list, explicit_title)
         if p is None:
-            return
+            return None
         if p["_global_cd"] is not None:
-            self._apply_global_countdown(p["_global_cd"])
+            self.after(0, self._apply_global_countdown, p["_global_cd"])
         opts = p["opts"]
         no_cancel = p["task_no_cancel"]
         title = p["task_title"]
         cd = p["task_countdown"]
+        first_gid = None
+
         for b64 in p["b64_metalinks"]:
-            self._register_metalink_task(b64, "Metalink 任务", no_cancel, title, cd, opts)
+            g = self._register_metalink_task(b64, "Metalink 任务", no_cancel, title, cd, opts)
+            if g and first_gid is None:
+                first_gid = g
+
         for t_path in p["torrents"]:
             gid = self._rpc_add_torrent(t_path, opts)
             if gid:
-                self._register_task(gid, os.path.basename(t_path), no_cancel,
-                                    task_title=title, countdown=cd)
+                if first_gid is None:
+                    first_gid = gid
+                n = os.path.basename(t_path)
+                self.after(0, lambda g=gid, nm=n, nc=no_cancel, tt=title, c=cd:
+                           self._register_task(g, nm, nc, task_title=tt, countdown=c))
+
         for m_path in p["metalinks"]:
             r = self._rpc_add_metalink_file(m_path, opts)
             if r is None:
@@ -783,89 +541,41 @@ class Aria2GUI(ctk.CTkToplevel):
                 initial_name = file_names[0]
             else:
                 initial_name = os.path.basename(m_path)
-            self._register_task(
-                gids[0], initial_name, no_cancel,
-                task_title=title, meta_hash_map=mh_map,
-                group_gids=gids, group_files=file_names,
-                placeholder_name=(not file_names),
-                countdown=cd,
-            )
+            if first_gid is None:
+                first_gid = gids[0]
+            def _reg(gs=gids, n=initial_name, mm=mh_map, nc=no_cancel, tt=title, fn=file_names, c=cd):
+                self._register_task(gs[0], n, nc,
+                                    task_title=tt, meta_hash_map=mm,
+                                    group_gids=gs, group_files=fn,
+                                    placeholder_name=(not fn),
+                                    countdown=c)
+            self.after(0, _reg)
+
         for m in p["magnets"]:
             gid = self._rpc_add_magnet(m, opts)
             if gid:
-                self._register_task(gid, "Magnet 任务", no_cancel, [m], opts, 0,
-                                    task_title=title, placeholder_name=True, countdown=cd)
+                if first_gid is None:
+                    first_gid = gid
+                self.after(0, lambda g=gid, mm=m, oo=opts, nc=no_cancel, tt=title, c=cd:
+                           self._register_task(g, "Magnet 任务", nc, [mm], oo, 0, tt,
+                                               placeholder_name=True, countdown=c))
+
         if p["http_mirrors"]:
             gid = self._rpc_add_http_mirrors(p["http_mirrors"], opts)
             if gid:
-                name = opts.get("out") or os.path.basename(urlparse(p["http_mirrors"][0]).path) or "下载任务"
-                self._register_task(gid, unquote(name), no_cancel, p["http_mirrors"], opts, 0,
-                                    task_title=title, countdown=cd)
-
-    def _add_task_sync(self, args_list):
-        """同步添加任务，返回首个 aria2 GID（无 UI 操作，异步注册 UI）"""
-        p = self._prepare_task(args_list)
-        if p is None:
-            return None
-        if p["_global_cd"] is not None:
-            self.after(0, self._apply_global_countdown, p["_global_cd"])
-        opts = p["opts"]
-        no_cancel = p["task_no_cancel"]
-        title = p["task_title"]
-        cd = p["task_countdown"]
-        first_gid = None
-        for b64 in p["b64_metalinks"]:
-            g = self._register_metalink_task(b64, "Metalink 任务", no_cancel, title, cd, opts)
-            if g and first_gid is None:
-                first_gid = g
-        if first_gid is None:
-            for t_path in p["torrents"]:
-                gid = self._rpc_add_torrent(t_path, opts)
-                if gid:
+                if first_gid is None:
                     first_gid = gid
-                    n = os.path.basename(t_path)
-                    self.after(0, lambda g=gid, nm=n, nc=no_cancel, tt=title, c=cd:
-                               self._register_task(g, nm, nc, None, None, 0, tt, countdown=c))
-                    break
-        if first_gid is None:
-            for m_path in p["metalinks"]:
-                r = self._rpc_add_metalink_file(m_path, opts)
-                if r is None:
-                    continue
-                gids = r["gids"]
-                mh_map = r["mh_map"]
-                file_names = r["file_names"]
-                if title:
-                    initial_name = title
-                elif file_names:
-                    initial_name = file_names[0]
-                else:
-                    initial_name = os.path.basename(m_path)
-                first_gid = gids[0]
-                def _reg(gs=gids, n=initial_name, mm=mh_map, nc=no_cancel, tt=title, fn=file_names, c=cd):
-                    self._register_task(gs[0], n, nc, None, None, 0, tt, None, mm,
-                                        placeholder_name=(not fn),
-                                        group_gids=gs, group_files=fn, countdown=c)
-                self.after(0, _reg)
-                break
-        if first_gid is None:
-            for m in p["magnets"]:
-                gid = self._rpc_add_magnet(m, opts)
-                if gid:
-                    first_gid = gid
-                    self.after(0, lambda g=gid, mm=m, oo=opts, nc=no_cancel, c=cd:
-                               self._register_task(g, "Magnet 任务", nc, [mm], oo, 0, None, None, None, True, countdown=c))
-                    break
-        if first_gid is None and p["http_mirrors"]:
-            gid = self._rpc_add_http_mirrors(p["http_mirrors"], opts)
-            if gid:
-                first_gid = gid
                 name = opts.get("out") or os.path.basename(urlparse(p["http_mirrors"][0]).path) or "下载任务"
                 nm = unquote(name)
                 hm = p["http_mirrors"]
                 self.after(0, lambda g=gid, n=nm, hm2=hm, oo=opts, nc=no_cancel, tt=title, c=cd:
                            self._register_task(g, n, nc, hm2, oo, 0, tt, countdown=c))
+
         return first_gid
+
+    def _add_task_from_args(self, args_list, explicit_title=None):
+        """薄壳：主实例首次启动调用，忽略返回值。"""
+        self._add_task_sync(args_list, explicit_title)
 
     def _register_task(self, gid, name, no_cancel=False, raw_uris=None, raw_opts=None, retry_count=0, task_title=None, meta_hash=None, meta_hash_map=None, placeholder_name=False, group_gids=None, group_files=None, countdown=None):
         with self.tasks_lock:
@@ -1313,7 +1023,9 @@ class Aria2GUI(ctk.CTkToplevel):
         """新增 metalink 任务，成功返回组长 GID，失败返回 None"""
         try:
             res = self.rpc.add_metalink(b64_content, opts)
-        except Exception:
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"add_metalink failed: {e}")
             return None
         if not res or "result" not in res:
             return None
@@ -1498,16 +1210,18 @@ class Aria2GUI(ctk.CTkToplevel):
                 dlg.grab_set()
             except Exception:
                 pass
-        except Exception:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"open config gui failed: {e}")
 
     def _on_config_submit(self, aria2_args, title, log_file=None):
         if log_file:
             self.log_file = log_file
         try:
             self._add_task_from_args(aria2_args, explicit_title=title)
-        except Exception:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"config submit failed: {e}")
 
     def _show_theme_menu(self):
         if getattr(self, "_theme_menu_win", None) is not None:
@@ -1600,8 +1314,9 @@ class Aria2GUI(ctk.CTkToplevel):
             cfg = load_config()
             cfg["theme"] = name
             save_config(cfg)
-        except Exception:
-            pass
+        except Exception as e:
+            from utils import log_write
+            log_write(self.log_file, f"switch theme failed: {e}")
         self._rebuild_ui()
 
     def _rebuild_ui(self):
@@ -2145,7 +1860,6 @@ class Aria2GUI(ctk.CTkToplevel):
                     if t and t.get("group_gids"):
                         all_gids.update(t["group_gids"])
             for gid in all_gids:
-                # t0 = time.time()
                 res = self.rpc.tell_status(gid, [
                     "status", "totalLength", "completedLength", "downloadSpeed",
                     "files", "followedBy", "bittorrent", "errorMessage"
@@ -2157,146 +1871,15 @@ class Aria2GUI(ctk.CTkToplevel):
             if not self.is_running or not self.winfo_exists():
                 return
             try:
-                # ===== 分组任务聚合 =====
-                for _lg in list(self.tasks.keys()):
-                    with self.tasks_lock:
-                        _lt = self.tasks.get(_lg)
-                    if not _lt:
-                        continue
-                    _gg = _lt.get("group_gids") or [_lg]
-                    if len(_gg) <= 1:
-                        continue
-                    _agg_total, _agg_done, _agg_speed = 0, 0, 0
-                    _agg_error = ""
-                    _agg_files = []
-                    _statuses = []
-                    _valid = False
-                    for _g in _gg:
-                        _r = results.get(_g)
-                        if not _r or not isinstance(_r, dict) or "result" not in _r:
-                            continue
-                        _rs = _r["result"]
-                        _valid = True
-                        _statuses.append(_rs.get("status", "unknown"))
-                        _agg_total += int(_rs.get("totalLength", 0))
-                        _agg_done += int(_rs.get("completedLength", 0))
-                        _agg_speed += int(_rs.get("downloadSpeed", 0))
-                        _agg_files.extend(_rs.get("files", []))
-                        if _rs.get("status") == "error" and not _agg_error:
-                            _agg_error = _rs.get("errorMessage", "")
-                    if not _valid:
-                        continue
-                    _st_set = set(_statuses)
-                    if _st_set == {"complete"}:
-                        _agg_status = "complete"
-                    elif "error" in _st_set:
-                        _agg_status = "error"
-                    elif "active" in _st_set:
-                        _agg_status = "active"
-                    elif "waiting" in _st_set:
-                        _agg_status = "waiting"
-                    elif "paused" in _st_set:
-                        _agg_status = "paused"
-                    elif "removed" in _st_set:
-                        _agg_status = "removed"
-                    else:
-                        _agg_status = _statuses[0] if _statuses else "unknown"
-                    results[_lg] = {
-                        "result": {
-                            "status": _agg_status,
-                            "totalLength": str(_agg_total),
-                            "completedLength": str(_agg_done),
-                            "downloadSpeed": str(_agg_speed),
-                            "errorMessage": _agg_error,
-                            "files": _agg_files,
-                        }
-                    }
+                self._aggregate_group_results(results)
                 active, g_total, g_done, g_speed = 0, 0, 0, 0
-                for gid, res in results.items():
-                    with self.tasks_lock:
-                        task = self.tasks.get(gid)
-                    if not task:
-                        continue
-                    # 冻结的任务不查询 aria2，直接使用缓存数据更新 UI
-                    if task.get("frozen"):
-                        self._update_task_ui(task["ui"], task, "complete", task["frozen_total"], task["frozen_done"], 0, None, gid)
-                        continue
-                    ui = task["ui"]
-                    if not res or not isinstance(res, dict) or "result" not in res:
-                        from utils import log_write
-                        log_write(self.log_file, f"[RPC-ABNORMAL] gid={gid} res={res} task_status={task.get('status')}")
-                        # 如果任务正在下载/等待中，不要销毁卡片，并更新 UI 为异常状态
-                        if task.get("status") in ("active", "waiting"):
-                            # 卡片强制显示速度为 0，保留已用时间，剩余时间改为橙色“异常暂停”
-                            elapsed = int(time.time() - task["start_time"])
-                            try:
-                                ui["lbl_stats"].configure(
-                                    text=f"{nice_duration(elapsed):>7}→异常暂停  0 B/s",
-                                    text_color=Theme.WARNING
-                                )
-                            except Exception:
-                                pass
-                            # 使用缓存进度参与全局统计，避免清零
-                            g_total += task.get("cached_total", 0)
-                            g_done += task.get("cached_done", 0)
-                            # 计入活跃任务数，防止全局误判“全部完成”
-                            active += 1
-                            continue
-                        # 非活跃任务才可安全销毁
-                        ui["frame"].destroy()
-                        with self.tasks_lock:
-                            self.tasks.pop(gid, None)
-                        self._update_layout()
-                        continue
-                    stat = res["result"]
-                    _f = stat.get("files", [])
-                    if _f:
-                        task["last_files"] = _f
-                        _fp = _f[0].get("path", "")
-                        if _fp:
-                            task["last_file_path"] = _fp
-                            task["last_dir"] = os.path.dirname(_fp)
-                    st = stat["status"]
-                    total = int(stat.get("totalLength", 0))
-                    done = int(stat.get("completedLength", 0))
-                    speed = int(stat.get("downloadSpeed", 0))
-                    g_total += total
-                    g_done += done
-                    g_speed += speed
-                    if st == "removed":
-                        ui["frame"].destroy()
-                        with self.tasks_lock:
-                            self.tasks.pop(gid, None)
-                        self._update_layout()
-                        continue
-                    if st == "complete" and stat.get("followedBy"):
-                        new_gid = stat["followedBy"][0]
-                        ui["frame"].destroy()
-                        with self.tasks_lock:
-                            self.tasks.pop(gid, None)
-                        self._register_task(new_gid, task["name"], task.get("no_cancel", False))
-                        continue
-                    if task.get("placeholder_name") and stat.get("files"):
-                        try:
-                            new_name = os.path.basename(stat["files"][0].get("path", ""))
-                            if new_name and new_name != task["name"]:
-                                ui["lbl_name"].configure(text=new_name)
-                                task["name"] = new_name
-                                task["placeholder_name"] = False
-                        except Exception:
-                            pass
-                    if not task.get("meta_hash") and task.get("meta_hash_map") and stat.get("files"):
-                        try:
-                            new_name = os.path.basename(stat["files"][0].get("path", ""))
-                            hlist = task["meta_hash_map"].get(new_name, [])
-                            if hlist:
-                                task["meta_hash"] = {"algo": hlist[0][0], "hex": hlist[0][1], "file_name": new_name}
-                        except Exception:
-                            pass
-                    error_msg = stat.get("errorMessage", "")
-                    self._update_task_ui(ui, task, st, total, done, speed, error_msg, gid)
-                    if st in ("active", "waiting", "paused"):
-                        active += 1
+                for gid, res in list(results.items()):
+                    handled, t, d, s, a = self._refresh_one_task(gid, res)
+                    if handled:
+                        g_total += t
+                        g_done += d
+                        g_speed += s
+                        active += a
                 self._update_global_stats(g_total, g_done, g_speed, active)
                 self._handle_auto_shutdown(active)
                 self._tick_task_countdown()
@@ -2307,13 +1890,153 @@ class Aria2GUI(ctk.CTkToplevel):
                 self._refresh_after_id = self.after(500, self._ui_refresh_loop)
 
         def _thread():
-            # import threading
             results = _fetch()
             if self.is_running and self.winfo_exists():
                 self.after(0, _apply, results)
 
         threading.Thread(target=_thread, daemon=True).start()
-    
+
+    def _aggregate_group_results(self, results):
+        """把分组任务（组内多 GID）的 total/done/speed/files 聚合到组长条目上"""
+        for _lg in list(self.tasks.keys()):
+            with self.tasks_lock:
+                _lt = self.tasks.get(_lg)
+            if not _lt:
+                continue
+            _gg = _lt.get("group_gids") or [_lg]
+            if len(_gg) <= 1:
+                continue
+            _agg_total, _agg_done, _agg_speed = 0, 0, 0
+            _agg_error = ""
+            _agg_files = []
+            _statuses = []
+            _valid = False
+            for _g in _gg:
+                _r = results.get(_g)
+                if not _r or not isinstance(_r, dict) or "result" not in _r:
+                    continue
+                _rs = _r["result"]
+                _valid = True
+                _statuses.append(_rs.get("status", "unknown"))
+                _agg_total += int(_rs.get("totalLength", 0))
+                _agg_done += int(_rs.get("completedLength", 0))
+                _agg_speed += int(_rs.get("downloadSpeed", 0))
+                _agg_files.extend(_rs.get("files", []))
+                if _rs.get("status") == "error" and not _agg_error:
+                    _agg_error = _rs.get("errorMessage", "")
+            if not _valid:
+                continue
+            _st_set = set(_statuses)
+            if _st_set == {"complete"}:
+                _agg_status = "complete"
+            elif "error" in _st_set:
+                _agg_status = "error"
+            elif "active" in _st_set:
+                _agg_status = "active"
+            elif "waiting" in _st_set:
+                _agg_status = "waiting"
+            elif "paused" in _st_set:
+                _agg_status = "paused"
+            elif "removed" in _st_set:
+                _agg_status = "removed"
+            else:
+                _agg_status = _statuses[0] if _statuses else "unknown"
+            results[_lg] = {
+                "result": {
+                    "status": _agg_status,
+                    "totalLength": str(_agg_total),
+                    "completedLength": str(_agg_done),
+                    "downloadSpeed": str(_agg_speed),
+                    "errorMessage": _agg_error,
+                    "files": _agg_files,
+                }
+            }
+
+    def _refresh_one_task(self, gid, res):
+        """刷新单任务 UI。返回 (handled, total, done, speed, active_delta)。
+        handled=False 表示本任务不计入本轮全局统计。"""
+        with self.tasks_lock:
+            task = self.tasks.get(gid)
+        if not task:
+            return (False, 0, 0, 0, 0)
+
+        if task.get("frozen"):
+            self._update_task_ui(task["ui"], task, "complete",
+                                 task["frozen_total"], task["frozen_done"], 0, None, gid)
+            return (False, 0, 0, 0, 0)
+
+        ui = task["ui"]
+        if not res or not isinstance(res, dict) or "result" not in res:
+            from utils import log_write
+            log_write(self.log_file, f"[RPC-ABNORMAL] gid={gid} res={res} task_status={task.get('status')}")
+            if task.get("status") in ("active", "waiting"):
+                elapsed = int(time.time() - task["start_time"])
+                try:
+                    ui["lbl_stats"].configure(
+                        text=f"{nice_duration(elapsed):>7}→异常暂停  0 B/s",
+                        text_color=Theme.WARNING
+                    )
+                except Exception:
+                    pass
+                return (True, task.get("cached_total", 0), task.get("cached_done", 0), 0, 1)
+            ui["frame"].destroy()
+            with self.tasks_lock:
+                self.tasks.pop(gid, None)
+            self._update_layout()
+            return (False, 0, 0, 0, 0)
+
+        stat = res["result"]
+        _f = stat.get("files", [])
+        if _f:
+            task["last_files"] = _f
+            _fp = _f[0].get("path", "")
+            if _fp:
+                task["last_file_path"] = _fp
+                task["last_dir"] = os.path.dirname(_fp)
+        st = stat["status"]
+        total = int(stat.get("totalLength", 0))
+        done = int(stat.get("completedLength", 0))
+        speed = int(stat.get("downloadSpeed", 0))
+
+        if st == "removed":
+            ui["frame"].destroy()
+            with self.tasks_lock:
+                self.tasks.pop(gid, None)
+            self._update_layout()
+            return (False, 0, 0, 0, 0)
+
+        if st == "complete" and stat.get("followedBy"):
+            new_gid = stat["followedBy"][0]
+            ui["frame"].destroy()
+            with self.tasks_lock:
+                self.tasks.pop(gid, None)
+            self._register_task(new_gid, task["name"], task.get("no_cancel", False))
+            return (False, 0, 0, 0, 0)
+
+        if task.get("placeholder_name") and stat.get("files"):
+            try:
+                new_name = os.path.basename(stat["files"][0].get("path", ""))
+                if new_name and new_name != task["name"]:
+                    ui["lbl_name"].configure(text=new_name)
+                    task["name"] = new_name
+                    task["placeholder_name"] = False
+            except Exception:
+                pass
+
+        if not task.get("meta_hash") and task.get("meta_hash_map") and stat.get("files"):
+            try:
+                new_name = os.path.basename(stat["files"][0].get("path", ""))
+                hlist = task["meta_hash_map"].get(new_name, [])
+                if hlist:
+                    task["meta_hash"] = {"algo": hlist[0][0], "hex": hlist[0][1], "file_name": new_name}
+            except Exception:
+                pass
+
+        error_msg = stat.get("errorMessage", "")
+        self._update_task_ui(ui, task, st, total, done, speed, error_msg, gid)
+        _active = 1 if st in ("active", "waiting", "paused") else 0
+        return (True, total, done, speed, _active)
+
     def _update_task_ui(self, ui, task, st, total, done, speed, error_msg=None, gid=None):
         
         if task.get("frozen"):

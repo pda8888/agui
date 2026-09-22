@@ -12,6 +12,7 @@ env/
 # 构建产物
 build/
 dist/
+*.spec
 *.manifest
 
 # aria2 内核
@@ -43,5 +44,3 @@ Thumbs.db
 
 # 用户下载临时文件
 *.part
-multi_a.bin 
-multi_b.bin 

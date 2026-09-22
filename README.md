@@ -73,6 +73,7 @@ python main.py --metalink="<base64编码的meta4内容>"
 - `rpc_client.py` — aria2 JSON-RPC 封装
 - `process_manager.py` — aria2c 进程与防火墙
 - `ipc_server.py` — 单实例 IPC
+- `http_server.py` — HTTP API 服务（--http-port 时启用）
 - `utils.py` — 工具函数
 - `ui_config.py` — 配置界面
 - `ui_download.py` — 下载监控主界面

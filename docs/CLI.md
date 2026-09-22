@@ -301,6 +301,8 @@ method 取值为 add / query / kill。
 - 带 --query 或 --kill 不转发，走独立分支直接调 IPC
 - 其他带 URL 的情况全部转发
 - 转发时 --countdown / --global-countdown / --metalink 会被主实例识别
+- 多 URL / 混合类型（torrent + magnet + HTTP）全部下发，主实例逐个建立任务；
+  回调只返回首个成功的 GID，其余任务可通过 UI 或 --query 逐个查询
 
 主程序注意：
 

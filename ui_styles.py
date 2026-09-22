@@ -211,6 +211,7 @@ def create_entry(parent, textvariable=None, width=None):
         fg_color="#2d3748",
         text_color=Theme.TEXT,
         border_color=Theme.MUTED,
+        border_width=1,
         height=28,
         corner_radius=6
     )
@@ -228,6 +229,7 @@ def create_spinbox(parent, from_=1, to=16, initial=None, width=80):
         fg_color="#2d3748",
         text_color=Theme.TEXT,
         border_color=Theme.MUTED,
+        border_width=1,
         width=width,
         height=28,
         corner_radius=6
@@ -249,7 +251,7 @@ def create_checkbox(parent, text, variable):
         fg_color=Theme.ACCENT,
         hover_color=Theme.ACCENT_LIGHT,
         corner_radius=4,
-        border_width=2,
+        border_width=1,
         checkbox_width=20,
         checkbox_height=20
     )

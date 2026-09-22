@@ -4,7 +4,6 @@
 import sys
 import os
 import json
-import json
 
 
 # === 版本信息 ===
@@ -147,8 +146,8 @@ def save_config(cfg):
         os.makedirs(AGUI_CONFIG_DIR, exist_ok=True)
         with open(AGUI_CONFIG_PATH, "w", encoding="utf-8", newline="") as f:
             json.dump(cfg, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write("[agui] save_config failed: " + str(e) + chr(10))
 
 
 DEFAULT_PREFERENCES = {
@@ -189,8 +188,8 @@ def save_preferences(prefs):
         cfg = load_config()
         cfg["preferences"] = dict(prefs) if isinstance(prefs, dict) else {}
         save_config(cfg)
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write("[agui] save_preferences failed: " + str(e) + chr(10))
 
 # === Aria2 默认配置 ===
 def get_default_aria2_args(base_path):

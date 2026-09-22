@@ -19,7 +19,6 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import gc
-import subprocess
 
 # 无参数启动时，立即隐藏控制台窗口，避免长时间黑屏
 if sys.platform == "win32" and len(sys.argv) == 1:
@@ -50,27 +49,6 @@ def send_result_via_callback(port, json_str):
     except Exception:
         return False
         
-# === UAC提权 (Windows) ===
-def request_admin_if_needed():
-    if sys.platform != "win32":
-        return
-    try:
-        import ctypes
-        if not ctypes.windll.shell32.IsUserAnAdmin():
-            if getattr(sys, "frozen", False):
-                executable = sys.executable
-                args = sys.argv[1:]
-            else:
-                executable = sys.executable
-                args = sys.argv
-            ctypes.windll.shell32.ShellExecuteW(
-                None, "runas", executable, 
-                subprocess.list2cmdline(args), None, 1
-            )
-            sys.exit(0)
-    except Exception:
-        pass
-
 # === 主函数 ===
 def main():
     raw_args = sys.argv[1:]

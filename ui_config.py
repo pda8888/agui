@@ -369,9 +369,10 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             self._close_theme_menu()
             self._apply_theme_choice(name)
 
+        from config import theme_display_name
         for name in list(THEMES.keys()):
             is_cur = (name == getattr(self, "_current_theme", ""))
-            label = ("\u2713 " if is_cur else "   ") + name
+            label = ("\u2713 " if is_cur else "   ") + theme_display_name(name)
             ctk.CTkButton(
                 box, text=label, anchor="w", width=150, height=28,
                 fg_color="transparent", hover_color="#4b5563",

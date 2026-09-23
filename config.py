@@ -62,7 +62,7 @@ THEMES = {
         "WARNING": "#fbbf24",
         "_style": "flat",
     },
-    "cyberpunk": {
+    "cp1": {
         "BG": "#0D1117",
         "CARD": "#161B22",
         "ACCENT": "#00E5FF",
@@ -75,7 +75,7 @@ THEMES = {
         "WARNING": "#F59E0B",
         "_style": "cyber",
     },
-    "cyberpunk_v1": {
+    "cp2": {
         "BG": "#0d0221",
         "CARD": "#1a0b2e",
         "ACCENT": "#f72585",
@@ -88,9 +88,97 @@ THEMES = {
         "WARNING": "#fee440",
         "_style": "cyber",
     },
+    "neon_dreams": {
+        "BG": "#0B0D17",
+        "CARD": "#161A2B",
+        "ACCENT": "#00FFFF",
+        "ACCENT_LIGHT": "#FF007A",
+        "TEXT": "#F5F5F5",
+        "MUTED": "#6B7394",
+        "SEMI_MUTED": "#A6ACCF",
+        "ERROR": "#FF007A",
+        "SUCCESS": "#00FF9F",
+        "WARNING": "#FFD600",
+        "_style": "cyber",
+    },
+    "tech_noir": {
+        "BG": "#1A1A1A",
+        "CARD": "#2C2C2E",
+        "ACCENT": "#39FF14",
+        "ACCENT_LIGHT": "#FF3D00",
+        "TEXT": "#E5E5E5",
+        "MUTED": "#6E6E70",
+        "SEMI_MUTED": "#A8A8AA",
+        "ERROR": "#FF3D00",
+        "SUCCESS": "#39FF14",
+        "WARNING": "#00BFAE",
+        "_style": "cyber",
+    },
+    "synthwave": {
+        "BG": "#070F34",
+        "CARD": "#141A48",
+        "ACCENT": "#FF1493",
+        "ACCENT_LIGHT": "#6F00FF",
+        "TEXT": "#F0E9FF",
+        "MUTED": "#5A6288",
+        "SEMI_MUTED": "#9DA4C8",
+        "ERROR": "#FF1493",
+        "SUCCESS": "#00BFFF",
+        "WARNING": "#FF6700",
+        "_style": "cyber",
+    },
+    "cyber_ui": {
+        "BG": "#000000",
+        "CARD": "#141414",
+        "ACCENT": "#FCEE0C",
+        "ACCENT_LIGHT": "#C5003C",
+        "TEXT": "#F5F5F5",
+        "MUTED": "#6B6B6B",
+        "SEMI_MUTED": "#B0B0B0",
+        "ERROR": "#C5003C",
+        "SUCCESS": "#00FF9F",
+        "WARNING": "#FCEE0C",
+        "_style": "cyber",
+    },
+    "chrome": {
+        "BG": "#2A3038",
+        "CARD": "#4A5568",
+        "ACCENT": "#7DF9FF",
+        "ACCENT_LIGHT": "#BD00FF",
+        "TEXT": "#F0F4F8",
+        "MUTED": "#8A95A5",
+        "SEMI_MUTED": "#C4CCD8",
+        "ERROR": "#BD00FF",
+        "SUCCESS": "#7DF9FF",
+        "WARNING": "#F6FF75",
+        "_style": "cyber",
+    },
 }
 
 DEFAULT_THEME = "midnight"
+
+# 旧主题名 → 新主题名映射（用于兼容旧配置文件）
+THEME_ALIASES = {
+    "cyberpunk": "cp1",
+    "cyberpunk_v1": "cp2",
+}
+
+# 主题内部名 → 菜单显示名
+THEME_DISPLAY = {
+    "midnight": "午夜蓝调",
+    "cp1": "极夜青",
+    "cp2": "夜幕残阳",
+    "neon_dreams": "霓虹之梦",
+    "tech_noir": "科技暗夜",
+    "synthwave": "合成器之夜",
+    "cyber_ui": "绚丽极客",
+    "chrome": "机械全息",
+}
+
+
+def theme_display_name(name):
+    """主题内部名转显示名，无映射则返回原名"""
+    return THEME_DISPLAY.get(name, name)
 
 
 class Theme:
@@ -109,6 +197,7 @@ class Theme:
 
 def apply_theme(name):
     """将指定主题色值应用到 Theme 类属性"""
+    name = THEME_ALIASES.get(name, name)
     t = THEMES.get(name) or THEMES[DEFAULT_THEME]
     for k, v in t.items():
         if k.startswith("_"):
@@ -129,6 +218,14 @@ def load_config():
             with open(AGUI_CONFIG_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
+                _t = data.get("theme")
+                if isinstance(_t, str) and _t in THEME_ALIASES:
+                    data["theme"] = THEME_ALIASES[_t]
+                    try:
+                        with open(AGUI_CONFIG_PATH, "w", encoding="utf-8", newline="") as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
                 return data
     except Exception:
         pass

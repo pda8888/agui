@@ -123,11 +123,11 @@ class Aria2GUI(ctk.CTkToplevel):
             return ctk.CTkButton(
                 top_icons, text=text, command=cmd, width=36, height=30,
                 fg_color="transparent", hover_color=_ICON_HOVER,
-                text_color=Theme.TEXT, font=(FONT_NORMAL[0], 16),
+                text_color=Theme.TEXT, font=(FONT_NORMAL[0], 16, "bold"),
                 corner_radius=4, border_width=0,
             )
         
-        self.btn_top_theme = _make_top_icon("◐", self._show_theme_menu)
+        self.btn_top_theme = _make_top_icon("🌗", self._show_theme_menu)
         self.btn_top_play = _make_top_icon("▶", self._resume_all)
         self.btn_top_pause = _make_top_icon("‖", self._pause_all)
         self.btn_top_clear = _make_top_icon("✕", self._clear_all)
@@ -689,7 +689,7 @@ class Aria2GUI(ctk.CTkToplevel):
             return ctk.CTkButton(
                 icons_frame, text=text, command=cmd, width=36, height=30,
                 fg_color="transparent", hover_color=_ICON_HOVER,
-                text_color=Theme.TEXT, font=(FONT_NORMAL[0], 16),
+                text_color=Theme.TEXT, font=(FONT_NORMAL[0], 16, "bold"),
                 corner_radius=4, border_width=0,
             )
         
@@ -1161,11 +1161,15 @@ class Aria2GUI(ctk.CTkToplevel):
                 win.overrideredirect(True)
                 win.attributes("-topmost", True)
                 win.configure(bg="#1f2937")
-                lbl = ctk.CTkLabel(
-                    win, text=text, font=FONT_SMALL,
-                    text_color=Theme.TEXT, fg_color="#1f2937",
+                box = ctk.CTkFrame(
+                    win, fg_color="#1f2937",
                     border_width=1, border_color="#4b5563",
                     corner_radius=6
+                )
+                box.pack(fill="both", expand=True)
+                lbl = ctk.CTkLabel(
+                    box, text=text, font=FONT_SMALL,
+                    text_color=Theme.TEXT, fg_color="transparent"
                 )
                 lbl.pack(padx=8, pady=4)
                 win.update_idletasks()
@@ -1186,7 +1190,7 @@ class Aria2GUI(ctk.CTkToplevel):
         def _hide(_e=None):
             if state["id"]:
                 try:
-                    widget.after_cancel(state["id"])
+                    self.after_cancel(state["id"])
                 except Exception:
                     pass
                 state["id"] = None
@@ -1201,7 +1205,7 @@ class Aria2GUI(ctk.CTkToplevel):
 
         def _enter(_e=None):
             _hide()
-            state["id"] = widget.after(200, _show)
+            state["id"] = self.after(200, _show)
 
         widget.bind("<Enter>", _enter, add="+")
         widget.bind("<Leave>", _hide, add="+")

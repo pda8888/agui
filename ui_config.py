@@ -169,13 +169,13 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         row1 = ctk.CTkFrame(self.content_container, fg_color="transparent")
         row1.pack(fill="x", pady=(15, 0))
 
-        create_label(row1, "重命名:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(row1, "重命名:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.title_var = tk.StringVar()
         create_entry(row1, self.title_var).pack(side="left", fill="x", expand=True)
 
         ctk.CTkFrame(row1, width=20, height=1, fg_color="transparent").pack(side="left")
 
-        create_label(row1, "分片数:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(row1, "分片数:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.split = create_spinbox(row1, initial=self.prefs.get("split", 5), width=60)
         self.split.pack(side="left")
 
@@ -183,7 +183,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         row2 = ctk.CTkFrame(self.content_container, fg_color="transparent")
         row2.pack(fill="x", pady=(10, 0))
 
-        create_label(row2, "存储路径:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(row2, "存储路径:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self._clock_btn = ctk.CTkButton(
             row2, text="\u23f1", width=30, height=26,
             fg_color="#2d3748", hover_color="#4b5563",
@@ -202,13 +202,13 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
 
         ua_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         ua_row.pack(fill="x", pady=(10, 0))
-        create_label(ua_row, "User-Agent:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(ua_row, "User-Agent:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.ua_var = tk.StringVar(value=self.prefs.get("ua") or DEFAULT_USER_AGENT)
         create_entry(ua_row, self.ua_var).pack(side="left", fill="x", expand=True)
 
         ref_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         ref_row.pack(fill="x", pady=(10, 0))
-        create_label(ref_row, "Referer:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(ref_row, "Referer:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.referer_var = tk.StringVar(value=self.prefs.get("referer", ""))
         create_entry(ref_row, self.referer_var).pack(side="left", fill="x", expand=True)
 
@@ -220,31 +220,31 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
 
         auth_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         auth_row.pack(fill="x", pady=(10, 0))
-        create_label(auth_row, "Authorization:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(auth_row, "Authorization:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.auth_var = tk.StringVar()
         create_entry(auth_row, self.auth_var).pack(side="left", fill="x", expand=True)
 
         cookie_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         cookie_row.pack(fill="x", pady=(10, 0))
-        create_label(cookie_row, "Cookie:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(cookie_row, "Cookie:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.cookie_var = tk.StringVar()
         create_entry(cookie_row, self.cookie_var).pack(side="left", fill="x", expand=True)
 
         proxy_row = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         proxy_row.pack(fill="x", pady=(10, 0))
-        create_label(proxy_row, "代理:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(proxy_row, "代理:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.proxy_var = tk.StringVar()
         create_entry(proxy_row, self.proxy_var).pack(side="left", fill="x", expand=True)
 
         pr1 = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         pr1.pack(fill="x", pady=(10, 0))
-        create_label(pr1, "最大连接数:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(pr1, "最大连接数:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.max_conn = create_spinbox(pr1, initial=self.prefs.get("max_conn", 16), width=60)
         self.max_conn.pack(side="left")
 
         ctk.CTkFrame(pr1, width=20, height=1, fg_color="transparent").pack(side="left")
 
-        create_label(pr1, "文件分配:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(pr1, "文件分配:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.file_allocation = ctk.CTkComboBox(
             pr1, values=["none", "prealloc", "trunc", "falloc"],
             state="readonly", font=FONT_SMALL, width=100, height=26,
@@ -256,20 +256,20 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
 
         pr2 = ctk.CTkFrame(self.advanced_container, fg_color="transparent")
         pr2.pack(fill="x", pady=(10, 0))
-        create_label(pr2, "RPC端口:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(pr2, "RPC端口:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.rpc_port = create_spinbox(pr2, initial=self.prefs.get("rpc_port", 16800), width=60)
         self.rpc_port.pack(side="left")
 
         ctk.CTkFrame(pr2, width=20, height=1, fg_color="transparent").pack(side="left")
 
-        create_label(pr2, "最小分片:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(pr2, "最小分片:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.min_split_size = create_entry(pr2, width=60)
         self.min_split_size.insert(0, self.prefs.get("min_split_size", "1M") or "1M")
         self.min_split_size.pack(side="left")
 
         ctk.CTkFrame(pr2, width=20, height=1, fg_color="transparent").pack(side="left")
 
-        create_label(pr2, "速度限制:", width=70, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(pr2, "速度限制:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.speed_limit = create_entry(pr2, width=60)
         self.speed_limit.insert(0, self.prefs.get("speed_limit", "0") or "0")
         self.speed_limit.pack(side="left")

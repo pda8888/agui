@@ -375,7 +375,9 @@ Windows 下即 `C:\\Users\\<用户名>\\.agui\\agui_config.json`。
 
 ### 8.3 字段
 
-- `theme`：当前主题，取值 `midnight` / `cyberpunk` / `cyberpunk_v1`
+- `theme`：当前主题，取值 `midnight` / `cp1` / `cp2` / `neon_dreams` / `tech_noir` / `synthwave` / `cyber_ui` / `chrome`
+  - 旧名 `cyberpunk` 自动映射为 `cp1`，`cyberpunk_v1` 自动映射为 `cp2`（首次启动时迁移回写）
+  - 菜单显示名对照：午夜蓝调 / 极夜青 / 夜幕残阳 / 霓虹之梦 / 科技暗夜 / 合成器之夜 / 绚丽极客 / 机械全息
 - `save_paths.recent`：最近使用过的保存路径，最多 20 条，倒序
 - `save_paths.starred`：收藏的保存路径
 - `preferences`：配置界面各字段的持久化值，仅在无参数启动 GUI 时读写

@@ -194,7 +194,7 @@ class Aria2GUI(ctk.CTkToplevel):
             self.after(100, self._marquee_tick)
             self.bind_all("<B1-Motion>", self._on_mouse_motion, add="+")
             self.bind_all("<ButtonRelease-1>", self._on_mouse_release, add="+")
-        self.bind("<FocusOut>", lambda _e: self._cancel_drag(), add="+")
+        self.bind("<FocusOut>", self._on_focus_out_cancel_drag, add="+")
 
     def _reapply_position(self):
         g = getattr(self, "_last_geo", None)
@@ -912,6 +912,10 @@ class Aria2GUI(ctk.CTkToplevel):
             if self.selected_gids:
                 self.selected_gids = set()
                 self._update_card_selection()
+
+    def _on_focus_out_cancel_drag(self, _e=None):
+        if self._drag_active:
+            self._cancel_drag()
 
     def _cancel_drag(self):
         self._drag_start = None

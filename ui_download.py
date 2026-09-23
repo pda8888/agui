@@ -102,23 +102,29 @@ class Aria2GUI(ctk.CTkToplevel):
         """构建界面"""
         self.title(self.base_title)
         
-        # 顶部栏：左 动态状态，右 4 图标 + 全局统计
+        # 顶部栏：左侧两行（状态 + 统计），右侧图标组（垂直居中）
         self.header = ctk.CTkFrame(self, fg_color="transparent")
         self.header.pack(fill="x", padx=12, pady=10)
-        
-        self.lbl_status = ctk.CTkLabel(
-            self.header, text="", font=FONT_SMALL,
-            text_color=Theme.ACCENT
-        )
-        self.lbl_status.pack(side="left")
-        
+
         right_box = ctk.CTkFrame(self.header, fg_color="transparent")
         right_box.pack(side="right")
-        
+
+        _left_stack = ctk.CTkFrame(self.header, fg_color="transparent")
+        _left_stack.pack(side="left", fill="x", expand=True)
+
+        _header_line1 = ctk.CTkFrame(_left_stack, fg_color="transparent")
+        _header_line1.pack(fill="x")
+
+        self.lbl_status = ctk.CTkLabel(
+            _header_line1, text="", font=FONT_SMALL,
+            text_color=Theme.ACCENT, height=16
+        )
+        self.lbl_status.pack(side="left", pady=0)
+
         _ICON_HOVER = "#4b5563"
         top_icons = ctk.CTkFrame(right_box, fg_color="transparent", corner_radius=6)
         top_icons.pack(side="right")
-        
+
         def _make_top_icon(text, cmd):
             return ctk.CTkButton(
                 top_icons, text=text, command=cmd, width=36, height=30,
@@ -126,7 +132,7 @@ class Aria2GUI(ctk.CTkToplevel):
                 text_color=Theme.TEXT, font=(FONT_NORMAL[0], 16, "bold"),
                 corner_radius=4, border_width=0,
             )
-        
+
         self.btn_top_theme = _make_top_icon("🌗", self._show_theme_menu)
         self.btn_top_play = _make_top_icon("▶", self._resume_all)
         self.btn_top_pause = _make_top_icon("‖", self._pause_all)
@@ -142,19 +148,22 @@ class Aria2GUI(ctk.CTkToplevel):
         self.btn_top_pause.pack(side="right")
         self.btn_top_play.pack(side="right")
         self.btn_top_add.pack(side="right")
-        
+
         self._bind_tooltip(self.btn_top_add, "添加任务")
         self._bind_tooltip(self.btn_top_play, "继续选中")
         self._bind_tooltip(self.btn_top_pause, "暂停选中")
         self._bind_tooltip(self.btn_top_clear, "清除已完成")
         self._bind_tooltip(self.btn_top_retry, "重试失败")
         self._bind_tooltip(self.btn_top_theme, "切换皮肤")
-        
+
+        _header_line2 = ctk.CTkFrame(_left_stack, fg_color="transparent")
+        _header_line2.pack(fill="x")
+
         self.lbl_global_stats = ctk.CTkLabel(
-            right_box, text="", font=FONT_SMALL,
-            text_color=Theme.SEMI_MUTED
+            _header_line2, text="", font=FONT_SMALL,
+            text_color=Theme.SEMI_MUTED, height=16
         )
-        self.lbl_global_stats.pack(side="right", padx=(0, 12))
+        self.lbl_global_stats.pack(side="left")
         
         # 任务容器
         self.task_container = ctk.CTkFrame(self, fg_color="transparent")
@@ -220,9 +229,16 @@ class Aria2GUI(ctk.CTkToplevel):
         except Exception:
             sc = 1.0
 
-        # 基础高度：Header + 边距
-        total_h = 50
-        CARD_GAP = 10
+        # 基础高度：Header 实测 + 边距
+        try:
+            self.header.update_idletasks()
+            total_h = self.header.winfo_reqheight()
+        except Exception:
+            total_h = 60
+        total_h = int(total_h / sc) if sc > 0 else total_h
+        # 卡间距 5（上下各 2+3），末卡底边距 N=15
+        total_h += 30
+        CARD_GAP = 5
 
         for task in tasks_snapshot:
             ui = task.get("ui", {})
@@ -656,7 +672,7 @@ class Aria2GUI(ctk.CTkToplevel):
     def _create_task_row(self, gid, name, no_cancel, task_title):
         frame = ctk.CTkFrame(self.task_container, fg_color=Theme.CARD, corner_radius=8,
                              border_width=1, border_color=Theme.CARD)
-        frame.pack(fill="x", pady=5)
+        frame.pack(fill="x", pady=(2, 3))
         _is_cyber = (getattr(Theme, "STYLE", "flat") == "cyber")
         if _is_cyber:
             stripe = ctk.CTkFrame(frame, fg_color=Theme.ACCENT, width=4,
@@ -2036,27 +2052,28 @@ class Aria2GUI(ctk.CTkToplevel):
     def _handle_auto_shutdown(self, active):
         with self.tasks_lock:
             tasks_snapshot = list(self.tasks.values())
-        if tasks_snapshot and active == 0:
-            has_error = any(t.get("status") == "error" for t in tasks_snapshot)
-            if has_error:
-                error_count = sum(1 for t in tasks_snapshot if t.get("status") == "error")
-                total_count = len(tasks_snapshot)
-                self.lbl_status.configure(
-                    text=f"❌ {error_count}/{total_count} 个任务失败，请手动关闭",
-                    text_color=Theme.ERROR
-                )
-            else:
-                self.lbl_status.configure(text="已完成", text_color=Theme.SUCCESS)
+        if not tasks_snapshot:
+            self.lbl_status.configure(text="等待...", text_color=Theme.ACCENT)
+            return
+        total = len(tasks_snapshot)
+        completed = sum(1 for t in tasks_snapshot if t.get("completed") or t.get("status") == "complete")
+        paused = sum(1 for t in tasks_snapshot if t.get("status") == "paused" and not t.get("completed"))
+        errored = sum(1 for t in tasks_snapshot if t.get("status") == "error")
+        downloading = max(0, total - completed - paused - errored)
+        locked = any(not t.get("completed") and t.get("no_cancel") for t in tasks_snapshot)
+        text = f"{total}个任务（{completed}个已完成/{downloading}个下载中/{paused}个暂停"
+        if errored:
+            text += f"/{errored}个失败"
+        text += "）"
+        if locked:
+            text += " · 锁定"
+        if errored:
+            color = Theme.ERROR
+        elif completed == total:
+            color = Theme.SUCCESS
         else:
-            with self.tasks_lock:
-                locked = any(not t.get("completed") and t.get("no_cancel") for t in self.tasks.values())
-            if locked:
-                status = f"下载{active}个任务(锁定)"
-            elif tasks_snapshot:
-                status = f"进行{active}个任务..."
-            else:
-                status = "等待..."
-            self.lbl_status.configure(text=status, text_color=Theme.ACCENT)
+            color = Theme.ACCENT
+        self.lbl_status.configure(text=text, text_color=color)
 
     def _try_close_window(self):
         with self.tasks_lock:

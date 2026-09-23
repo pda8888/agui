@@ -113,6 +113,12 @@
 - 回归脚本：`fix/smoke.py`
 - 同步脚本：`fix/sync_to_release.py`
 
+### 有意未做（不是遗漏，是被判定收益 < 风险）
+- `rpc_client.rpc_request` 的 `except: return None`——高频调用，改返回结构影响面大
+- `_create_task_row` 未拆（~200 行）——耦合拖选/悬停/tooltip，拆出需传大量回调
+- 无 CI——`fix/smoke.py` 手工跑替代
+- `cyberpunk_v1` 已删，保留 `cp1`/`cp2`
+
 ---
 
 ## 十、已知坑（防重犯）

@@ -40,6 +40,13 @@ def get_aria2c_path():
 
 ARIA2_PATH = get_aria2c_path()
 
+
+def get_asset_path(name):
+    """获取 assets/ 下资源文件路径，兼容 PyInstaller 打包"""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, "assets", name)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", name)
+
 # === UI 颜色主题 ===
 THEMES = {
     "midnight": {

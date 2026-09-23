@@ -25,6 +25,17 @@ class Aria2GUI(ctk.CTkToplevel):
     def __init__(self, parent, config, server_socket=None):
         super().__init__(parent)
         self.withdraw()
+        try:
+            self.attributes("-alpha", 0.0)
+        except Exception:
+            pass
+        try:
+            from config import get_asset_path
+            _icon = get_asset_path("boat.ico")
+            if os.path.exists(_icon):
+                self.iconbitmap(_icon)
+        except Exception:
+            pass
         
         self.config = config
         self.server_socket = server_socket
@@ -150,13 +161,22 @@ class Aria2GUI(ctk.CTkToplevel):
         
         # 底部控制区 (仅占位，如果有需要可以放全局按钮)
         self.footer = ctk.CTkFrame(self, fg_color="transparent")
-        self.footer.pack(fill="x", padx=12, pady=5)
+        # self.footer.pack(fill="x", padx=12, pady=5)
         
         self.protocol("WM_DELETE_WINDOW", self._try_close_window)
         self._update_layout()
         # 仅当配置要求显示 GUI 时才取消隐藏
         if self.config.get("show_gui", True):
             self.deiconify()
+            try:
+                self.update_idletasks()
+            except Exception:
+                pass
+            self._reapply_position()
+            try:
+                self.attributes("-alpha", 1.0)
+            except Exception:
+                pass
         if not getattr(self, "_tick_started", False):
             self._tick_started = True
             self.after(500, self._ui_refresh_loop)
@@ -164,6 +184,16 @@ class Aria2GUI(ctk.CTkToplevel):
             self.bind_all("<B1-Motion>", self._on_mouse_motion, add="+")
             self.bind_all("<ButtonRelease-1>", self._on_mouse_release, add="+")
         self.bind("<FocusOut>", lambda _e: self._cancel_drag(), add="+")
+
+    def _reapply_position(self):
+        g = getattr(self, "_last_geo", None)
+        if not g:
+            return
+        try:
+            self.geometry(g)
+            self.update_idletasks()
+        except Exception:
+            pass
 
     def _update_layout(self):
         """动态更新窗口高度（按卡片实测高度累加）"""
@@ -189,7 +219,7 @@ class Aria2GUI(ctk.CTkToplevel):
             sc = 1.0
 
         # 基础高度：Header + 边距
-        total_h = 80
+        total_h = 50
         CARD_GAP = 10
 
         for task in tasks_snapshot:
@@ -230,10 +260,14 @@ class Aria2GUI(ctk.CTkToplevel):
             if self.position_offset:
                 x += self.position_offset[0]
                 y += self.position_offset[1]
-            self.geometry(f"{target_w}x{target_h}+{x}+{y}")
+            _geo = f"{target_w}x{target_h}+{x}+{y}"
+            self.geometry(_geo)
+            self._last_geo = _geo
             self.is_position_set = True
         else:
-            self.geometry(f"{target_w}x{target_h}")
+            _geo = f"{target_w}x{target_h}"
+            self.geometry(_geo)
+            self._last_geo = _geo
 
     def _ipc_handler(self, args):
         """IPC消息处理（在监听线程中同步调用），返回要发送给客户端的字节或 None"""
@@ -643,7 +677,7 @@ class Aria2GUI(ctk.CTkToplevel):
         line1 = ctk.CTkFrame(inner, fg_color="transparent")
         line1.pack(fill="x")
         _ICON_HOVER = "#4b5563"
-        icons_frame = ctk.CTkFrame(line1, fg_color="transparent", corner_radius=6)
+        icons_frame = ctk.CTkFrame(line1, fg_color="transparent", corner_radius=0, border_width=0)
         icons_frame.pack(side="right")
         lbl_name = ctk.CTkLabel(line1, text=name, text_color=Theme.TEXT,
                                 font=(FONT_NORMAL[0], 12, "bold"), anchor="w")
@@ -671,29 +705,7 @@ class Aria2GUI(ctk.CTkToplevel):
         self._bind_tooltip(btn_cancel, "删除任务")
         self._bind_tooltip(btn_open, "打开文件夹")
         
-        _leave_id = {"id": None}
-        def _on_enter(_e=None):
-            if _leave_id["id"]:
-                try:
-                    icons_frame.after_cancel(_leave_id["id"])
-                except Exception:
-                    pass
-                _leave_id["id"] = None
-            try:
-                icons_frame.configure(fg_color=_ICON_HOVER)
-            except Exception:
-                pass
-        def _on_leave(_e=None):
-            def _do():
-                try:
-                    icons_frame.configure(fg_color="transparent")
-                except Exception:
-                    pass
-                _leave_id["id"] = None
-            _leave_id["id"] = icons_frame.after(60, _do)
-        for _w in (icons_frame, btn_pause, btn_cancel, btn_open, btn_info):
-            _w.bind("<Enter>", _on_enter)
-            _w.bind("<Leave>", _on_leave)
+        # 图标组 hover 退化为按钮自带 hover（CTkFrame 圆角在含按钮时失效）
         btn_info.bind("<Enter>", lambda e, g=gid: self.info.schedule_show(g), add="+")
         btn_info.bind("<Leave>", lambda e, g=gid: self.info.schedule_hide(), add="+")
         

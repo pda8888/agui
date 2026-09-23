@@ -24,6 +24,17 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
     
     def __init__(self, parent, is_master=True, auto_referer=False, on_submit=None, initial_log_file=None):
         super().__init__(parent)
+        try:
+            from config import get_asset_path
+            _icon = get_asset_path("boat.ico")
+            if os.path.exists(_icon):
+                self.iconbitmap(_icon)
+        except Exception:
+            pass
+        try:
+            self.attributes("-alpha", 0.0)
+        except Exception:
+            pass
         self.is_master = is_master
         self.launch_cfg = None
         self.on_submit = on_submit
@@ -70,6 +81,14 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             logical_h = max(300, min(900, logical_h)) + HEIGHT_SAFETY_PAD
             if not self._initial_positioned:
                 center_window(self, 640, logical_h)
+                try:
+                    self.update_idletasks()
+                except Exception:
+                    pass
+                try:
+                    self.attributes("-alpha", 1.0)
+                except Exception:
+                    pass
                 self._initial_positioned = True
             else:
                 x = self.winfo_x()

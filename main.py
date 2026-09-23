@@ -51,6 +51,12 @@ def send_result_via_callback(port, json_str):
         
 # === 主函数 ===
 def main():
+    if sys.platform == "win32":
+        try:
+            import ctypes as _ct
+            _ct.windll.shell32.SetCurrentProcessExplicitAppUserModelID("pda8888.agui")
+        except Exception:
+            pass
     raw_args = sys.argv[1:]
             
     # 0. 检查帮助参数
@@ -173,6 +179,13 @@ def main():
     # 【核心修改】创建一个持久的、隐藏的根窗口
     root = ctk.CTk()
     root.withdraw() # 隐藏主窗口
+    try:
+        from config import get_asset_path
+        _icon = get_asset_path("boat.ico")
+        if os.path.exists(_icon):
+            root.iconbitmap(_icon)
+    except Exception:
+        pass
     
     # 5. 如果没有URL,打开配置界面 (作为 Toplevel 运行)
     # 但如果指定了 --http-port，跳过配置界面，直接进入后台下载模式

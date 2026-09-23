@@ -285,6 +285,7 @@ UI_ARG_PREFIXES = (
     "-silent",
     "--silent",
     "--metalink",
+    "--no-add",
     "--verify-hash",
     "--marquee-interval",
     "--marquee-mode",

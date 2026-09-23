@@ -134,6 +134,8 @@ class Aria2GUI(ctk.CTkToplevel):
         self.btn_top_retry = _make_top_icon("↻", self._retry_all)
         self.btn_top_add = _make_top_icon("⊕", self._open_config_gui)
         self.btn_top_add.configure(width=42, height=36, font=(FONT_NORMAL[0], 22))
+        if self.config.get("no_add"):
+            self.btn_top_add.configure(state="disabled", text_color=Theme.MUTED)
         self.btn_top_theme.pack(side="right")
         self.btn_top_retry.pack(side="right")
         self.btn_top_clear.pack(side="right")
@@ -1764,12 +1766,23 @@ class Aria2GUI(ctk.CTkToplevel):
             st_color = Theme.ACCENT
         ui["lbl_state"].configure(text=st_text, text_color=st_color)
         if st == "paused":
-            ui["btn_pause"].configure(text="▶", state="normal")
+            tgt_pause_text, tgt_pause_state = "▶", "normal"
         elif st in ("active", "waiting"):
-            ui["btn_pause"].configure(text="‖", state="normal")
+            tgt_pause_text, tgt_pause_state = "‖", "normal"
         else:
-            ui["btn_pause"].configure(state="disabled")
-        ui["btn_cancel"].configure(state="disabled" if (task.get("no_cancel") and st != "complete") else "normal")
+            tgt_pause_text, tgt_pause_state = None, "disabled"
+        if (task.get("_btn_pause_text") != tgt_pause_text
+                or task.get("_btn_pause_state") != tgt_pause_state):
+            if tgt_pause_text is None:
+                ui["btn_pause"].configure(state=tgt_pause_state)
+            else:
+                ui["btn_pause"].configure(text=tgt_pause_text, state=tgt_pause_state)
+            task["_btn_pause_text"] = tgt_pause_text
+            task["_btn_pause_state"] = tgt_pause_state
+        tgt_cancel_state = "disabled" if (task.get("no_cancel") and st != "complete") else "normal"
+        if task.get("_btn_cancel_state") != tgt_cancel_state:
+            ui["btn_cancel"].configure(state=tgt_cancel_state)
+            task["_btn_cancel_state"] = tgt_cancel_state
         # ===== 走马灯 =====
         _gf = task.get("group_files") or []
         if len(_gf) > 1 and (self.config.get("marquee_mode") or "scroll") == "switch":

@@ -18,6 +18,7 @@ def parse_args(argv):
     callback_port = None
     http_port = None
     silent = False
+    no_add = False
     verify_hash = None
     marquee_interval = 1.5
     marquee_mode = "scroll"
@@ -204,6 +205,9 @@ def parse_args(argv):
         elif a in ("-silent", "--silent"):
             silent = True
             i += 1
+        elif a == "--no-add":
+            no_add = True
+            i += 1
             
         else:
             aria2_args.append(a)
@@ -226,6 +230,7 @@ def parse_args(argv):
         "callback_port": callback_port,
         "http_port": http_port,
         "silent": silent,
+        "no_add": no_add,
         "verify_hash": verify_hash,
         "marquee_interval": marquee_interval,
         "marquee_mode": marquee_mode,

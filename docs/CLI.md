@@ -30,7 +30,8 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 | --retry N | int | 错误自动重试次数（默认 3） |
 | --retry-interval N | int | 重试间隔秒（默认 2） |
 | --retry-exhausted-timeout N | int | 重试耗尽后弹窗倒计时秒（默认 10） |
-| --no-cancel | flag | 禁止取消/关闭。任务级互锁 |
+| --no-cancel | flag | 禁止取消/关闭。**任务级**互锁 |
+| --no-add | flag | 禁用 ⊕ 按钮。**实例级**，仅主实例启动时生效 |
 | --verify-hash algo:hex | string | HTTP 任务二次 hash 校验，algo 为 md5/sha-1/sha-256/sha-512 |
 | --marquee-mode scroll\|switch | string | 多文件走马灯模式（默认 scroll） |
 | --marquee-speed F | float | scroll 模式步进秒（默认 0.06） |
@@ -44,6 +45,8 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 --metalink 与 --callback-port 配合：返回 {"status":"success","GID":"<组长GID>"}。多文件时 GID 为组长 GID。
 
 --metalink hash 校验：metalink 内若含 <verification><hash>，自动启用二次校验。
+
+实例级 vs 任务级：`--no-add` 是进程级开关，从实例转发时会被主实例吞掉不生效；`--no-cancel` 随任务写入卡片，每个任务各自记录。
 
 ### 2.2 命令式参数
 

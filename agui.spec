@@ -1,9 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
+# 设置 AGUI_SLIM=1 时不打包 aria2c.exe（运行时按需下载）
+SLIM = os.environ.get("AGUI_SLIM", "") == "1"
+binaries = [] if SLIM else [('aria2c.exe', '.')]
+
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[('aria2c.exe', '.')],
+    binaries=binaries,
     datas=[
         ('assets', 'assets')
     ],

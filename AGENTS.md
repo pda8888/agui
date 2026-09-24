@@ -109,7 +109,7 @@
   - 旧名 `cyberpunk`→`cp1`，`cyberpunk_v1`→`cp2`，首次启动自动迁移配置
   - 显示名对照：午夜蓝调 / 极夜青 / 夜幕残阳 / 霓虹之梦 / 科技暗夜 / 合成器之夜 / 绚丽极客 / 机械全息
 - 配置文件：`~/.agui/agui_config.json`，三子键 `theme` / `save_paths` / `preferences`
-- 核心文件：`main.py` / `config.py` / `arg_parser.py` / `rpc_client.py` / `process_manager.py` / `ipc_server.py` / `http_server.py` / `utils.py` / `ui_config.py` / `ui_download.py` / `ui_styles.py` / `ui_help.py` / `info_overlay.py`
+- 核心文件：`main.py` / `config.py` / `arg_parser.py` / `rpc_client.py` / `process_manager.py` / `ipc_server.py` / `http_server.py` / `aria2_fetcher.py` / `utils.py` / `ui_config.py` / `ui_download.py` / `ui_styles.py` / `ui_help.py` / `info_overlay.py`
 - 回归脚本：`fix/smoke.py`
 - 同步脚本：`fix/sync_to_release.py`
 
@@ -133,3 +133,4 @@
 8. `--no-cancel` 是**任务级**，随卡片记录
 9. `_rpc_add_metalink_file` 等可能从 IPC/HTTP 线程进入的 UI 操作，必须 `self.after(0, ...)` 调度
 10. tooltip / 主题菜单等浮层定时器挂 `self.after` 而非 `widget.after`
+11. `aria2c.exe` 按需下载：`-a`/`--aria2c-path` 优先；否则用 `%TEMP%\aria2c.exe`；不存在则从 gh-proxy 三代理拉 aria2 1.37.0 zip 解压。启动失败强制重下重试一次

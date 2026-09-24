@@ -73,8 +73,9 @@ def assign_process_to_job(proc_pid):
         ctypes.windll.kernel32.CloseHandle(h_process)
 
 # === 防火墙管理 ===
-def update_firewall_rules():
-    """添加防火墙规则。返回 True 表示成功或不需要，False 表示失败/权限不足"""
+def update_firewall_rules(aria2_path=None):
+    """添加防火墙规则。返回 True 表示成功或不需要，False 表示失败/权限不足
+    aria2_path: None 时用 config.ARIA2_PATH（兼容旧调用）"""
     if sys.platform != "win32":
         return True
     
@@ -87,7 +88,8 @@ def update_firewall_rules():
     
     try:
         rule_name = "aria2c_for_agui"
-        exe_path = os.path.abspath(ARIA2_PATH).lower().replace("/", "\\")
+        _ap = aria2_path if aria2_path else ARIA2_PATH
+        exe_path = os.path.abspath(_ap).lower().replace("/", "\\")
         
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -132,12 +134,13 @@ def cleanup_firewall_rules():
         pass
 
 # === Aria2进程管理 ===
-def build_aria2_command(aria2_args, logpath=None):
+def build_aria2_command(aria2_args, aria2_path=None, logpath=None):
     """构建aria2c启动命令"""
-    if not os.path.exists(ARIA2_PATH):
-        raise FileNotFoundError(f"aria2c not found at {ARIA2_PATH}")
+    _ap = aria2_path if aria2_path else ARIA2_PATH
+    if not os.path.exists(_ap):
+        raise FileNotFoundError(f"aria2c not found at {_ap}")
     
-    base_path = os.path.dirname(ARIA2_PATH)
+    base_path = os.path.dirname(_ap)
     defaults = get_default_aria2_args(base_path)
     
     # 收集用户参数
@@ -153,7 +156,7 @@ def build_aria2_command(aria2_args, logpath=None):
         i += 1
     
     # 构建命令
-    cmd = [ARIA2_PATH]
+    cmd = [_ap]
     for key, value in defaults.items():
         if key not in user_arg_keys:
             cmd.append(f"{key}={value}")
@@ -205,13 +208,13 @@ def build_aria2_command(aria2_args, logpath=None):
     log_write(logpath, f"Starting aria2c: {' '.join(cmd)}")
     return cmd
 
-def start_aria2c(aria2_args, logpath=None):
+def start_aria2c(aria2_args, aria2_path=None, logpath=None):
     # import time as _time
     """启动aria2c进程"""
     from rpc_client import rpc_request
     from config import RPC_STARTUP_WAIT, RPC_STARTUP_RETRIES
     
-    cmd = build_aria2_command(aria2_args, logpath)
+    cmd = build_aria2_command(aria2_args, aria2_path, logpath)
     
     proc, stderr_output = None, b""
     try:

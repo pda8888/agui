@@ -19,6 +19,7 @@ def parse_args(argv):
     http_port = None
     silent = False
     no_add = False
+    aria2c_path = None
     verify_hash = None
     marquee_interval = 1.5
     marquee_mode = "scroll"
@@ -208,6 +209,12 @@ def parse_args(argv):
         elif a == "--no-add":
             no_add = True
             i += 1
+        elif a in ("-a", "--aria2c-path") and i + 1 < len(argv):
+            aria2c_path = argv[i + 1]
+            i += 2
+        elif a.startswith("--aria2c-path="):
+            aria2c_path = a.split("=", 1)[1]
+            i += 1
             
         else:
             aria2_args.append(a)
@@ -231,6 +238,7 @@ def parse_args(argv):
         "http_port": http_port,
         "silent": silent,
         "no_add": no_add,
+        "aria2c_path": aria2c_path,
         "verify_hash": verify_hash,
         "marquee_interval": marquee_interval,
         "marquee_mode": marquee_mode,

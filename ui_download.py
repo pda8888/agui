@@ -398,7 +398,30 @@ class Aria2GUI(ctk.CTkToplevel):
 
     def _start_aria2_and_first_task(self, args):
         try:
-            self.aria2_proc, ready, stderr = start_aria2c(args, self.log_file)
+            from config import resolve_aria2_path
+            from aria2_fetcher import fetch_aria2c
+            from utils import log_write
+            _cli = self.config.get("aria2c_path")
+            _ap = resolve_aria2_path(
+                cli_path=_cli,
+                on_progress=lambda s, d, t: log_write(
+                    self.log_file, f"aria2c fetch: {s} {d}/{t}"
+                ),
+                on_need_manual=None,
+                log_path=self.log_file,
+            )
+            if not _ap:
+                self.after(0, self._on_error, "无法获取 aria2c.exe，请用 -a 指定路径或检查网络")
+                return
+            self.aria2_proc, ready, stderr = start_aria2c(args, _ap, self.log_file)
+            if not ready:
+                err = stderr.decode("utf-8", errors="ignore").strip() if stderr else "未知错误"
+                log_write(self.log_file, f"first start failed: {err}; retrying after force refetch")
+                from aria2_fetcher import default_target_dir
+                _dir = default_target_dir()
+                _ap2 = fetch_aria2c(target_dir=_dir, force=True)
+                if _ap2:
+                    self.aria2_proc, ready, stderr = start_aria2c(args, _ap2, self.log_file)
             if not ready:
                 err = stderr.decode("utf-8", errors="ignore").strip() if stderr else "未知错误"
                 self.after(0, self._on_error, f"Aria2c进程无法启动。\n\n{err}")

@@ -130,7 +130,7 @@ def main():
 
 
     if is_master:
-        fw_ok = update_firewall_rules()
+        fw_ok = update_firewall_rules(cfg.get("aria2c_path"))
         if not fw_ok:
             log_write(cfg.get("log_file"), "warn: 防火墙规则未添加（非管理员或失败），BT/DHT 监听可能被系统防火墙拦截")
     

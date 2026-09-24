@@ -29,7 +29,7 @@ def default_target_dir():
     return tempfile.gettempdir()
 
 
-def fetch_aria2c(target_dir=None, force=False, progress_cb=None, timeout=30):
+def fetch_aria2c(target_dir=None, force=False, progress_cb=None, timeout=30, err_out=None):
     """下载并解压 aria2c.exe 到 target_dir。
 
     target_dir: 目标目录，默认 %TEMP%
@@ -52,35 +52,38 @@ def fetch_aria2c(target_dir=None, force=False, progress_cb=None, timeout=30):
 
     for proxy in PROXIES:
         url = proxy + _RELEASE_URL
-        data = _download(url, progress_cb, timeout)
-        if data is None:
+        try:
+            data = _download(url, progress_cb, timeout)
+        except Exception as e:
+            msg = proxy + ": " + type(e).__name__ + ": " + str(e)
+            if err_out is not None:
+                err_out.append(msg)
             continue
         if _extract(data, exe_path, progress_cb):
             return exe_path
+        if err_out is not None:
+            err_out.append(proxy + ": extract failed")
     return None
 
 
 def _download(url, progress_cb, timeout):
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "AGUI/1.5"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            total = int(resp.headers.get("Content-Length", 0) or 0)
-            buf = io.BytesIO()
-            done = 0
-            while True:
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                buf.write(chunk)
-                done += len(chunk)
-                if progress_cb:
-                    try:
-                        progress_cb("downloading", done, total)
-                    except Exception:
-                        pass
-            return buf.getvalue()
-    except Exception:
-        return None
+    req = urllib.request.Request(url, headers={"User-Agent": "AGUI/1.5"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        total = int(resp.headers.get("Content-Length", 0) or 0)
+        buf = io.BytesIO()
+        done = 0
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            buf.write(chunk)
+            done += len(chunk)
+            if progress_cb:
+                try:
+                    progress_cb("downloading", done, total)
+                except Exception:
+                    pass
+        return buf.getvalue()
 
 
 def _extract(zip_data, exe_path, progress_cb):

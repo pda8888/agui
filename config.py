@@ -55,7 +55,7 @@ def get_aria2c_path():
 ARIA2_PATH = get_aria2c_path()
 
 
-def resolve_aria2_path(cli_path=None, on_progress=None, on_need_manual=None, log_path=None):
+def resolve_aria2_path(cli_path=None, on_progress=None, on_need_manual=None, log_path=None, err_out=None):
     """按决策链解析 aria2c 路径（仅解析/下载，不做启动验证）。
     1. cli_path 指定且存在 → 返回该路径
     2. %TEMP%\aria2c.exe 存在 → 返回
@@ -72,7 +72,7 @@ def resolve_aria2_path(cli_path=None, on_progress=None, on_need_manual=None, log
     _temp_exe = os.path.join(_dir, ARIA2_FILENAME)
     if os.path.isfile(_temp_exe):
         return _temp_exe
-    _got = fetch_aria2c(target_dir=_dir, progress_cb=on_progress)
+    _got = fetch_aria2c(target_dir=_dir, progress_cb=on_progress, err_out=err_out)
     if _got:
         return _got
     if on_need_manual:

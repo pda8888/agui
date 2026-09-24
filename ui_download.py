@@ -420,14 +420,18 @@ class Aria2GUI(ctk.CTkToplevel):
             from aria2_fetcher import fetch_aria2c
             from utils import log_write
             _cli = self.config.get("aria2c_path")
+            _errs = []
             _ap = resolve_aria2_path(
                 cli_path=_cli,
                 on_progress=self._on_fetch_progress,
                 on_need_manual=None,
                 log_path=self.log_file,
+                err_out=_errs,
             )
             if not _ap:
-                self.after(0, self._on_error, "无法获取 aria2c.exe，请用 -a 指定路径或检查网络")
+                _det = chr(10).join(_errs) if _errs else "无详细信息"
+                _msg = "无法获取 aria2c.exe，请用 -a 指定路径或检查网络。" + chr(10) + chr(10) + "详细：" + chr(10) + _det
+                self.after(0, self._on_error, _msg)
                 return
             self.aria2_proc, ready, stderr = start_aria2c(args, _ap, self.log_file)
             if not ready:

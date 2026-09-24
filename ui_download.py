@@ -396,6 +396,24 @@ class Aria2GUI(ctk.CTkToplevel):
         from http_server import run_http_server
         run_http_server(self, self.http_port, self.log_file)
 
+    def _on_fetch_progress(self, stage, done, total):
+        """aria2c 按需下载时的进度回调：写日志 + 状态栏提示"""
+        from utils import log_write
+        log_write(self.log_file, f"aria2c fetch: {stage} {done}/{total}")
+        if stage == "downloading":
+            try:
+                self.after(0, self._show_fetch_status)
+            except Exception:
+                pass
+
+    def _show_fetch_status(self):
+        try:
+            if self.winfo_exists():
+                self.lbl_status.configure(text="正在下载 aria2c.exe...",
+                                          text_color=Theme.ACCENT)
+        except Exception:
+            pass
+
     def _start_aria2_and_first_task(self, args):
         try:
             from config import resolve_aria2_path
@@ -404,9 +422,7 @@ class Aria2GUI(ctk.CTkToplevel):
             _cli = self.config.get("aria2c_path")
             _ap = resolve_aria2_path(
                 cli_path=_cli,
-                on_progress=lambda s, d, t: log_write(
-                    self.log_file, f"aria2c fetch: {s} {d}/{t}"
-                ),
+                on_progress=self._on_fetch_progress,
                 on_need_manual=None,
                 log_path=self.log_file,
             )

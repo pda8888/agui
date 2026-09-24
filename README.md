@@ -89,6 +89,7 @@ pyinstaller --clean --noconfirm agui.spec
 
 产物 `dist\agui.exe` 约 9.6 MB。首次运行时若 `%TEMP%\aria2c.exe` 不存在，
 自动从 gh-proxy.com / hk.gh-proxy.org / cdn.gh-proxy.com 三代理依次下载 aria2 1.37.0 并解压。
+下载期间状态栏会显示「正在下载 aria2c.exe...」，不阻塞窗口；完成后自动启动 sidecar。
 也可用 `-a` / `--aria2c-path <path>` 指定本地 aria2c.exe。
 
 > 注意：`set VAR=val & cmd` 中 `&` 前的空格会进值（变 `"val "`）；请把 `set` 单独一行执行。

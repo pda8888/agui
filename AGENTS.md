@@ -133,5 +133,5 @@
 8. `--no-cancel` 是**任务级**，随卡片记录
 9. `_rpc_add_metalink_file` 等可能从 IPC/HTTP 线程进入的 UI 操作，必须 `self.after(0, ...)` 调度
 10. tooltip / 主题菜单等浮层定时器挂 `self.after` 而非 `widget.after`
-11. `aria2c.exe` 按需下载：`-a`/`--aria2c-path` 优先；否则用 `%TEMP%\aria2c.exe`；不存在则从 gh-proxy 三代理拉 aria2 1.37.0 zip 解压。启动失败强制重下重试一次
+11. `aria2c.exe` 按需下载：`-a`/`--aria2c-path` 优先；否则用 `%TEMP%\aria2c.exe`；不存在则从 gh-proxy 三代理拉 aria2 1.37.0 zip 解压。启动失败强制重下重试一次。下载期间状态栏显示「正在下载 aria2c.exe...」，不阻塞（实现：`ui_download._on_fetch_progress`）
 12. Windows cmd `set VAR=val & cmd` 中 `&` 前的空格会进值（变 `"val "`）；判断用 `.strip()`，或 `set` 单独一行

@@ -89,6 +89,8 @@ def update_firewall_rules(aria2_path=None):
     try:
         rule_name = "aria2c_for_agui"
         _ap = aria2_path if aria2_path else ARIA2_PATH
+        if not _ap:
+            return False
         exe_path = os.path.abspath(_ap).lower().replace("/", "\\")
         
         startupinfo = subprocess.STARTUPINFO()
@@ -137,8 +139,8 @@ def cleanup_firewall_rules():
 def build_aria2_command(aria2_args, aria2_path=None, logpath=None):
     """构建aria2c启动命令"""
     _ap = aria2_path if aria2_path else ARIA2_PATH
-    if not os.path.exists(_ap):
-        raise FileNotFoundError(f"aria2c not found at {_ap}")
+    if not _ap or not os.path.exists(_ap):
+        raise FileNotFoundError(f"aria2c not found at {_ap!r}")
     
     base_path = os.path.dirname(_ap)
     defaults = get_default_aria2_args(base_path)

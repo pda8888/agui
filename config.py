@@ -21,22 +21,36 @@ RPC_STARTUP_RETRIES = 20
 ARIA2_FILENAME = "aria2c.exe"
 
 def get_aria2c_path():
-    """获取aria2c可执行文件路径"""
+    """获取aria2c可执行文件路径；不存在返回 None（slim 包场景）"""
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         temp_path = os.path.join(sys._MEIPASS, ARIA2_FILENAME)
         exe_dir = os.path.dirname(os.path.abspath(sys.executable))
         fixed_path = os.path.join(exe_dir, ARIA2_FILENAME)
-        
-        if not os.path.exists(fixed_path) or os.path.getmtime(temp_path) > os.path.getmtime(fixed_path):
+
+        temp_exists = os.path.exists(temp_path)
+        fixed_exists = os.path.exists(fixed_path)
+
+        if temp_exists:
             try:
-                import shutil
-                shutil.copy2(temp_path, fixed_path)
-            except:
-                pass
-        
-        return fixed_path if os.path.exists(fixed_path) else temp_path
+                need_copy = (not fixed_exists) or os.path.getmtime(temp_path) > os.path.getmtime(fixed_path)
+            except Exception:
+                need_copy = False
+            if need_copy:
+                try:
+                    import shutil
+                    shutil.copy2(temp_path, fixed_path)
+                    fixed_exists = True
+                except Exception:
+                    pass
+
+        if fixed_exists:
+            return fixed_path
+        if temp_exists:
+            return temp_path
+        return None
     else:
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), ARIA2_FILENAME)
+        _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), ARIA2_FILENAME)
+        return _p if os.path.exists(_p) else None
 
 ARIA2_PATH = get_aria2c_path()
 

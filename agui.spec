@@ -3,7 +3,7 @@
 import os
 
 # 设置 AGUI_SLIM=1 时不打包 aria2c.exe（运行时按需下载）
-SLIM = os.environ.get("AGUI_SLIM", "") == "1"
+SLIM = os.environ.get("AGUI_SLIM", "").strip() == "1"
 binaries = [] if SLIM else [('aria2c.exe', '.')]
 
 a = Analysis(

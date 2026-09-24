@@ -13,7 +13,7 @@ An ultra-lightweight downloader based on aria2c. Windows first, memory < 30 MB, 
 - **info hover overlay**: first-level directory aggregation + full expansion + scrolling + clipboard
 - **Single-instance IPC**: multiple launches are automatically forwarded to the main instance
 - **Command line / HTTP API / callback port**: three external interfaces for easy integration into main programs
-- **Multiple theme switching**: midnight / cyberpunk / cyberpunk_v1, follows system DPI, workspace centered
+- **Multiple theme switching**: Midnight Blues/Polar Night/Neon Dusk/Neon Dreams/Tech Noir/Synthwave Nights/Cyber UI/Chrome Reflections, follows system DPI, workspace centered
 
 ## Environment requirements
 

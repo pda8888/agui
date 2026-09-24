@@ -65,6 +65,34 @@ python main.py --metalink="<base64编码的meta4内容>"
 完整的命令行参数、HTTP API、回调协议、IPC 机制说明见 [docs/CLI.md](docs/CLI.md)。
 
 ---
+## 打包
+
+两种模式，用环境变量 `AGUI_SLIM` 切换。
+
+### 全量包（含 aria2c.exe）
+
+确保项目根目录有 `aria2c.exe`（可从缓存 `copy %TEMP%\aria2c.exe .` 恢复）：
+
+```
+set AGUI_SLIM=
+pyinstaller --clean --noconfirm agui.spec
+```
+
+产物 `dist\agui.exe` 约 11.4 MB。
+
+### 精简包（不含 aria2c.exe，运行时按需下载）
+
+```
+set AGUI_SLIM=1
+pyinstaller --clean --noconfirm agui.spec
+```
+
+产物 `dist\agui.exe` 约 9.6 MB。首次运行时若 `%TEMP%\aria2c.exe` 不存在，
+自动从 gh-proxy.com / hk.gh-proxy.org / cdn.gh-proxy.com 三代理依次下载 aria2 1.37.0 并解压。
+也可用 `-a` / `--aria2c-path <path>` 指定本地 aria2c.exe。
+
+> 注意：`set VAR=val & cmd` 中 `&` 前的空格会进值（变 `"val "`）；请把 `set` 单独一行执行。
+
 ## 项目结构
 .
 - `main.py` — 入口

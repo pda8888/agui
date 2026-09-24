@@ -323,17 +323,21 @@ agui.exe --log-to=D:\logs\my.log https://example.com/file.zip
 
 日志文件**启动即创建**（空文件），事件发生时追加。
 
-### 7.2 默认日志（无参数启动）
+**优先级**：`--log-to` 显式指定时**覆盖**配置文件的 `preferences.log_path`，也忽略 `log_enabled=False`。
 
-无参数启动且未指定 --log-to 时，主实例在**当前工作目录**生成时间戳文件：
+### 7.2 默认日志（未指定 --log-to 时按 preferences 决定）
 
-```
-agui-YYYY-MM-DD-HH-MM.log
-```
+未指定 `--log-to` 且为主实例时，主实例读取 `~/.agui/agui_config.json` 的 `preferences`：
+
+| `log_enabled` | `log_path` | 行为 |
+|---|---|---|
+| `true`（默认） | 空 | 在**当前工作目录**生成时间戳文件 `agui-YYYY-MM-DD-HH-MM.log` |
+| `true` | 有值（绝对或相对） | 写到该路径；相对路径按当前工作目录解析 |
+| `false` | — | **不生成任何日志文件**（连空文件也不创建） |
 
 同一分钟内重复启动会追加 -1、-2 后缀避免覆盖：`agui-2026-09-20-09-31-1.log`。
 
-配置界面高级选项内有「记录日志」勾选框（默认勾选），可指定文件名或绝对路径。取消勾选后本次任务不写日志，已生成的空文件保留。
+配置界面高级选项内有「记录日志」勾选框（默认勾选），可指定文件名或绝对路径。勾选框对应 `log_enabled`，路径对应 `log_path`，点「保存配置」后写入配置文件，下次启动生效。
 
 ### 7.3 日志内容
 
@@ -381,6 +385,9 @@ Windows 下即 `C:\\Users\\<用户名>\\.agui\\agui_config.json`。
 - `save_paths.recent`：最近使用过的保存路径，最多 20 条，倒序
 - `save_paths.starred`：收藏的保存路径
 - `preferences`：配置界面各字段的持久化值，仅在无参数启动 GUI 时读写
+  - `log_enabled`（bool，默认 `true`）：是否生成日志文件。`false` 时启动不创建空文件
+  - `log_path`（string）：日志路径。为空则用当前目录 `agui-时间戳.log`；相对路径按当前工作目录解析
+  - 二者仅决定**未指定 `--log-to`** 时的默认行为；`--log-to` 命令行参数始终优先
 - 敏感字段不持久化：Authorization / Cookie / 代理 不写入此文件
 
 ### 8.4 迁移

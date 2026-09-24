@@ -105,15 +105,25 @@ def main():
                 sys.exit(0)
     
     if is_master and not cfg.get("log_file"):
-        import time as _time
-        _ts = _time.strftime("%Y-%m-%d-%H-%M")
-        _base = f"agui-{_ts}"
-        _fname = _base + ".log"
-        _i = 1
-        while os.path.exists(_fname):
-            _fname = f"{_base}-{_i}.log"
-            _i += 1
-        cfg["log_file"] = _fname
+        from config import load_preferences as _load_prefs
+        _prefs = _load_prefs()
+        if _prefs.get("log_enabled", True):
+            _lp = (_prefs.get("log_path") or "").strip()
+            if _lp:
+                if not os.path.isabs(_lp):
+                    _lp = os.path.join(os.getcwd(), _lp)
+                cfg["log_file"] = _lp
+            else:
+                import time as _time
+                _ts = _time.strftime("%Y-%m-%d-%H-%M")
+                _base = f"agui-{_ts}"
+                _fname = _base + ".log"
+                _i = 1
+                while os.path.exists(_fname):
+                    _fname = f"{_base}-{_i}.log"
+                    _i += 1
+                cfg["log_file"] = _fname
+        # log_enabled=False：不设 log_file，不生成空文件
 
     if cfg.get("log_file"):
         ensure_log_file(cfg["log_file"])

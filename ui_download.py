@@ -1760,13 +1760,20 @@ class Aria2GUI(ctk.CTkToplevel):
             ui["frame"].destroy()
             with self.tasks_lock:
                 self.tasks.pop(gid, None)
-            self._register_task(new_gid, task["name"], task.get("no_cancel", False))
+            self._register_task(new_gid, task["name"], task.get("no_cancel", False),
+                                placeholder_name=True)
             return (False, 0, 0, 0, 0)
 
         if task.get("placeholder_name") and stat.get("files"):
             try:
-                new_name = os.path.basename(stat["files"][0].get("path", ""))
-                if new_name and new_name != task["name"]:
+                _bt = stat.get("bittorrent") or {}
+                _bt_name = (_bt.get("info") or {}).get("name", "") or ""
+                if _bt_name:
+                    new_name = _bt_name
+                else:
+                    new_name = os.path.basename(stat["files"][0].get("path", ""))
+                if (new_name and new_name != task["name"]
+                        and not new_name.startswith("[METADATA]")):
                     ui["lbl_name"].configure(text=new_name)
                     task["name"] = new_name
                     task["placeholder_name"] = False

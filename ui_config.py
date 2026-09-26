@@ -143,11 +143,16 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
 
         # --- 种子 tab ---
         self.tab_seed_frame = ctk.CTkFrame(self.content_container, fg_color="transparent")
-        self.drop_canvas = tk.Canvas(
-            self.tab_seed_frame, height=120,
-            bg="#2d3748", highlightthickness=0, bd=0,
+        self._drop_wrap = ctk.CTkFrame(
+            self.tab_seed_frame, height=100, fg_color="#2d3748",
+            corner_radius=6, border_width=0,
         )
-        self.drop_canvas.pack(fill="x")
+        self._drop_wrap.pack(fill="x")
+        self._drop_wrap.pack_propagate(False)
+        self.drop_canvas = tk.Canvas(
+            self._drop_wrap, bg="#2d3748", highlightthickness=0, bd=0,
+        )
+        self.drop_canvas.pack(fill="both", expand=True)
         self.drop_canvas.bind("<Configure>", self._draw_drop_border)
         self.drop_canvas.bind("<Button-1>", lambda e: self._browse_torrent())
         try:
@@ -159,24 +164,24 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             self.tab_seed_frame, text="", text_color=Theme.SEMI_MUTED,
             font=FONT_SMALL, anchor="w", justify="left",
         )
-        self.seed_files_label.pack(fill="x", pady=(8, 0))
+        # 初始不 pack；仅在有内容时才显示
 
         # 默认显示链接 tab
         self.tab_link_frame.pack(fill="x")
         self._set_tab_active("link")
 
         # ===== 核心区：重命名 + 分片数 =====
-        row1 = ctk.CTkFrame(self.content_container, fg_color="transparent")
-        row1.pack(fill="x", pady=(15, 0))
+        self._row1_ref = ctk.CTkFrame(self.content_container, fg_color="transparent")
+        self._row1_ref.pack(fill="x", pady=(15, 0))
 
-        create_label(row1, "重命名:", width=95, anchor="e").pack(side="left", padx=(0, 5))
+        create_label(self._row1_ref, "重命名:", width=95, anchor="e").pack(side="left", padx=(0, 5))
         self.title_var = tk.StringVar()
-        create_entry(row1, self.title_var).pack(side="left", fill="x", expand=True)
+        create_entry(self._row1_ref, self.title_var).pack(side="left", fill="x", expand=True)
 
-        ctk.CTkFrame(row1, width=20, height=1, fg_color="transparent").pack(side="left")
+        ctk.CTkFrame(self._row1_ref, width=20, height=1, fg_color="transparent").pack(side="left")
 
-        create_label(row1, "分片数:", width=95, anchor="e").pack(side="left", padx=(0, 5))
-        self.split = create_spinbox(row1, initial=self.prefs.get("split", 5), width=60)
+        create_label(self._row1_ref, "分片数:", width=95, anchor="e").pack(side="left", padx=(0, 5))
+        self.split = create_spinbox(self._row1_ref, initial=self.prefs.get("split", 5), width=60)
         self.split.pack(side="left")
 
         # ===== 存储路径 =====
@@ -322,13 +327,21 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
     
     def _switch_tab(self, key):
         self.current_tab = key
+        _ref = getattr(self, "_row1_ref", None)
         if key == "link":
             self.tab_seed_frame.pack_forget()
-            self.tab_link_frame.pack(fill="x")
+            if _ref is not None:
+                self.tab_link_frame.pack(fill="x", before=_ref)
+            else:
+                self.tab_link_frame.pack(fill="x")
         else:
             self.tab_link_frame.pack_forget()
-            self.tab_seed_frame.pack(fill="x")
+            if _ref is not None:
+                self.tab_seed_frame.pack(fill="x", before=_ref)
+            else:
+                self.tab_seed_frame.pack(fill="x")
         self._set_tab_active(key)
+        self.after(30, self._apply_dynamic_height)
 
     def _set_tab_active(self, key):
         try:
@@ -657,7 +670,13 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             try:
                 _paths = self.url_text.get("1.0", "end").strip().splitlines()
                 _seed = [p for p in _paths if p.lower().endswith((".torrent", ".meta4", ".metalink"))]
-                self.seed_files_label.configure(text="\n".join(_seed) if _seed else "")
+                if _seed:
+                    self.seed_files_label.configure(text="\n".join(_seed))
+                    if not self.seed_files_label.winfo_manager():
+                        self.seed_files_label.pack(fill="x", pady=(8, 0))
+                else:
+                    self.seed_files_label.configure(text="")
+                    self.seed_files_label.pack_forget()
             except Exception:
                 pass
                 

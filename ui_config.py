@@ -682,6 +682,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             aria2_args.append(f"--user-agent={ua}")
         custom_title = self.title_var.get().strip()
         if custom_title:
+            aria2_args.append(f'--out={custom_title}')
             aria2_args.append(f'--title={custom_title}')
         processed_urls = []
         for item in lines:

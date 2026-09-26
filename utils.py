@@ -133,21 +133,7 @@ def extract_urls_and_out(aria2_args):
         elif url_pattern.match(clean_a):
             urls.append(clean_a)
     
-    # 尝试从URL提取文件名
-    if out_name is None and urls:
-        first = urls[0]
-        first_low = first.lower()
-        if not (first_low.endswith(".torrent")
-                or first_low.endswith(".meta4")
-                or first_low.endswith(".metalink")) \
-                and not first_low.startswith("magnet:"):
-            try:
-                encoded_name = os.path.basename(urlparse(first).path)
-                out_name = unquote(encoded_name, encoding="utf-8") if encoded_name else "download"
-            except:
-                out_name = "download"
-    elif out_name is None:
-        out_name = "download"
+
     
     return urls, out_name
 

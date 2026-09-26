@@ -112,15 +112,6 @@ class Aria2GUI(ctk.CTkToplevel):
         _left_stack = ctk.CTkFrame(self.header, fg_color="transparent")
         _left_stack.pack(side="left", fill="x", expand=True)
 
-        _header_line1 = ctk.CTkFrame(_left_stack, fg_color="transparent")
-        _header_line1.pack(fill="x")
-
-        self.lbl_status = ctk.CTkLabel(
-            _header_line1, text="", font=FONT_SMALL,
-            text_color=Theme.ACCENT, height=16
-        )
-        self.lbl_status.pack(side="left", pady=0)
-
         _ICON_HOVER = "#4b5563"
         top_icons = ctk.CTkFrame(right_box, fg_color="transparent", corner_radius=6)
         top_icons.pack(side="right")
@@ -210,8 +201,6 @@ class Aria2GUI(ctk.CTkToplevel):
         """动态更新窗口高度（按卡片实测高度累加）"""
         with self.tasks_lock:
             tasks_snapshot = list(self.tasks.values())
-        count = len(tasks_snapshot)
-        self.title(f"{self.base_title} - 多任务下载中 ({count})" if count > 1 else self.base_title)
 
         # 先强制刷新布局，确保 winfo_reqheight 拿到真值
         try:
@@ -409,8 +398,7 @@ class Aria2GUI(ctk.CTkToplevel):
     def _show_fetch_status(self):
         try:
             if self.winfo_exists():
-                self.lbl_status.configure(text="正在下载 aria2c.exe...",
-                                          text_color=Theme.ACCENT)
+                self.title(f"{self.base_title} -- 正在下载 aria2c.exe...")
         except Exception:
             pass
 
@@ -490,8 +478,6 @@ class Aria2GUI(ctk.CTkToplevel):
                     t, info = parse_custom_t_arg(args_list[i + 1] if arg == "--title" else arg.split("=", 1)[1])
                     task_title = f"{t}: {info}" if info else t
                     break
-        if out_name and out_name != "download" and "out" not in opts:
-            opts["out"] = out_name
         save_dir = opts.get("dir", os.getcwd())
         try:
             if not os.path.exists(save_dir):
@@ -652,11 +638,16 @@ class Aria2GUI(ctk.CTkToplevel):
             if gid:
                 if first_gid is None:
                     first_gid = gid
-                name = opts.get("out") or os.path.basename(urlparse(p["http_mirrors"][0]).path) or "下载任务"
-                nm = unquote(name)
+                if opts.get("out"):
+                    nm = opts["out"]
+                    _ph = False
+                else:
+                    nm = "下载任务"
+                    _ph = True
                 hm = p["http_mirrors"]
-                self.after(0, lambda g=gid, n=nm, hm2=hm, oo=opts, nc=no_cancel, tt=title, c=cd:
-                           self._register_task(g, n, nc, hm2, oo, 0, tt, countdown=c))
+                self.after(0, lambda g=gid, n=nm, hm2=hm, oo=opts, nc=no_cancel, tt=title, c=cd, ph=_ph:
+                           self._register_task(g, n, nc, hm2, oo, 0, tt,
+                                               placeholder_name=ph, countdown=c))
 
         return first_gid
 
@@ -2100,7 +2091,7 @@ class Aria2GUI(ctk.CTkToplevel):
         with self.tasks_lock:
             tasks_snapshot = list(self.tasks.values())
         if not tasks_snapshot:
-            self.lbl_status.configure(text="等待...", text_color=Theme.ACCENT)
+            self.title(f"{self.base_title} -- 等待...")
             return
         total = len(tasks_snapshot)
         completed = sum(1 for t in tasks_snapshot if t.get("completed") or t.get("status") == "complete")
@@ -2120,7 +2111,7 @@ class Aria2GUI(ctk.CTkToplevel):
             color = Theme.SUCCESS
         else:
             color = Theme.ACCENT
-        self.lbl_status.configure(text=text, text_color=color)
+        self.title(f"{self.base_title} -- {text}")
 
     def _try_close_window(self):
         with self.tasks_lock:

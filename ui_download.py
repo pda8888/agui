@@ -62,6 +62,7 @@ class Aria2GUI(ctk.CTkToplevel):
         self._active_tooltip = None
         self.info = InfoOverlay(self)
         self.is_running = True
+        self._fetching_aria2c = True
         self.shutdown_start_time = None
         self._refresh_after_id = None
         self.app_start_time = time.time()
@@ -396,9 +397,10 @@ class Aria2GUI(ctk.CTkToplevel):
                 pass
 
     def _show_fetch_status(self):
+        self._fetching_aria2c = True
         try:
             if self.winfo_exists():
-                self.title(f"{self.base_title} -- 正在下载 aria2c.exe...")
+                self.title(f"{self.base_title} -- 正在下载 aria2c.exe，请稍等……")
         except Exception:
             pass
 
@@ -656,6 +658,7 @@ class Aria2GUI(ctk.CTkToplevel):
         self._add_task_sync(args_list, explicit_title)
 
     def _register_task(self, gid, name, no_cancel=False, raw_uris=None, raw_opts=None, retry_count=0, task_title=None, meta_hash=None, meta_hash_map=None, placeholder_name=False, group_gids=None, group_files=None, countdown=None):
+        self._fetching_aria2c = False
         with self.tasks_lock:
             self.tasks[gid] = {
                 "name": name, "status": "active", "completed": False, "no_cancel": no_cancel,
@@ -2112,6 +2115,8 @@ class Aria2GUI(ctk.CTkToplevel):
             self.lbl_global_stats.configure(text="")
 
     def _handle_auto_shutdown(self, active):
+        if getattr(self, "_fetching_aria2c", False):
+            return
         with self.tasks_lock:
             tasks_snapshot = list(self.tasks.values())
         if not tasks_snapshot:
@@ -2149,6 +2154,7 @@ class Aria2GUI(ctk.CTkToplevel):
         self._on_close()
 
     def _on_error(self, msg):
+        self._fetching_aria2c = False
         if not self.is_running:
             return
         self.is_running = False

@@ -299,7 +299,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         bottom = ctk.CTkFrame(card, fg_color="transparent")
         bottom.pack(fill="x", padx=20, pady=(15, 15), side="bottom")
 
-        self.advanced_var = tk.BooleanVar(value=self.prefs.get("advanced", False))
+        self.advanced_var = tk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             bottom, text="高级选项", variable=self.advanced_var,
             text_color=Theme.TEXT, font=FONT_NORMAL,
@@ -505,7 +505,6 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             _init_lp = os.path.basename(self.initial_log_file) if self.initial_log_file else ""
             _cur_lp = self.log_path_var.get().strip()
             prefs["log_path"] = "" if _cur_lp == _init_lp else _cur_lp
-            prefs["advanced"] = bool(self.advanced_var.get())
             save_preferences(prefs)
             return True
         except Exception:

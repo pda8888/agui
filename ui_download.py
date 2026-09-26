@@ -1424,6 +1424,23 @@ class Aria2GUI(ctk.CTkToplevel):
                 )
             except Exception:
                 pass
+            if task.get("frozen"):
+                try:
+                    _ui = task["ui"]
+                    _t = task.get("frozen_total", 0) or 0
+                    _d = task.get("frozen_done", 0) or 0
+                    _pct = (_d / _t * 100) if _t > 0 else 0
+                    _elapsed = time.time() - task.get("start_time", time.time())
+                    _ui["bar"].set(_pct / 100)
+                    _ui["lbl_pct"].configure(text=f"{_pct:>5.1f}%")
+                    _ui["lbl_state"].configure(text="", text_color=Theme.SUCCESS)
+                    _ui["lbl_stats"].configure(text=(
+                        f"{nice_duration(_elapsed):>7}→{nice_duration(0):<7}"
+                        f"  {nice_size(_d):>9}/{nice_size(_t):<9}"
+                        f"  {nice_size(0):>9}/s"
+                    ))
+                except Exception:
+                    pass
         if x is not None and y is not None:
             try:
                 self.geometry(f"+{x}+{y}")

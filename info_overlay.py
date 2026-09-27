@@ -94,6 +94,7 @@ class InfoOverlay:
                     bd=0, highlightthickness=0, wrap="none",
                     insertbackground=Theme.TEXT,
                     selectbackground="#3b82f6", selectforeground="#ffffff",
+                    tabs="340 left 560 right 620 left 790 right",
                 )
                 txt.grid(row=0, column=0, sticky="nsew")
                 sb = ctk.CTkScrollbar(txt_frame, command=txt.yview, width=10)
@@ -188,18 +189,28 @@ class InfoOverlay:
             tb = self._info_text
             tb.delete("1.0", "end")
             tb.insert("1.0", text)
-            n_lines = max(1, text.count("\n") + 1)
-            _content_h = n_lines * 18 + 24
-            want_h = min(420, max(80, _content_h)) + 34
+            _n_lines = max(1, text.count("\n") + 1)
+            _LINE_H = 20
             try:
-                import tkinter.font as _tkfont
-                _f = _tkfont.Font(font=FONT_SMALL)
-                _px_w = max((_f.measure(_line) for _line in text.split("\n")), default=0)
+                import tkinter.font as _tkfont2
+                _f2 = self._get_font() if hasattr(self, "_get_font") else _tkfont2.Font(font=FONT_SMALL)
+                _lsp = _f2.metrics("linespace")
+                if _lsp and _lsp > 0:
+                    _LINE_H = _lsp
             except Exception:
-                _px_w = max((len(_line) for _line in text.split("\n")), default=0) * 10
-            want_w = max(420, min(1100, _px_w + 80))
+                pass
+            _HDR = 40
+            _3_LINES_H = 3 * _LINE_H + _HDR
+            _content_h = _n_lines * _LINE_H + _HDR
+            if _content_h <= _3_LINES_H:
+                want_h = _content_h + 34
+                _need_sb = False
+            else:
+                want_h = _3_LINES_H + 34
+                _need_sb = True
+            want_w = 820
             if self._info_sb is not None:
-                if _content_h > (want_h - 34):
+                if _need_sb:
                     self._info_sb.grid()
                 else:
                     self._info_sb.grid_remove()
@@ -246,8 +257,74 @@ class InfoOverlay:
         except Exception:
             self._info_win.geometry(f"{want_w}x{want_h}")
 
+    def _truncate_display(self, s, max_px):
+        """按像素宽度截断，超长补 …"""
+        f = self._get_font()
+        if f is None:
+            return s[:40]
+        w = 0
+        out = []
+        for ch in s:
+            try:
+                cw = f.measure(ch)
+            except Exception:
+                cw = 7
+            if w + cw > max_px:
+                return "".join(out) + "\u2026"
+            out.append(ch)
+            w += cw
+        return "".join(out)
+
+    def _get_font(self):
+        f = getattr(self, "_info_font", None)
+        if f is not None:
+            return f
+        try:
+            import tkinter.font as _tkfont
+            f = _tkfont.Font(font=FONT_SMALL)
+            self._info_font = f
+            return f
+        except Exception:
+            return None
+
+    def _fit_left(self, s, width_px):
+        f = self._get_font()
+        if f is None:
+            return s.ljust(width_px // 8)
+        space_w = f.measure(" ") or 4
+        out = []
+        w = 0
+        for ch in s:
+            cw = f.measure(ch)
+            if w + cw > width_px - 12:
+                out.append("\u2026")
+                w += f.measure("\u2026")
+                break
+            out.append(ch)
+            w += cw
+        n = max(0, int((width_px - w) // space_w))
+        return "".join(out) + " " * n
+
+    def _fit_right(self, s, width_px):
+        f = self._get_font()
+        if f is None:
+            return s.rjust(width_px // 8)
+        space_w = f.measure(" ") or 4
+        w = 0
+        for ch in s:
+            w += f.measure(ch)
+        n = max(0, int((width_px - w) // space_w))
+        return " " * n + s
+
+    def _filter_selected(self, files):
+        if not files:
+            return files
+        if not any("selected" in f for f in files):
+            return files
+        return [f for f in files if f.get("selected") != "false"]
+
     def _build_info_text(self, task):
-        files = task.get("last_files") or []
+        files = self._filter_selected(task.get("last_files") or [])
         base_dir = task.get("last_dir", "") or ""
         if not files:
             group_gids = task.get("group_gids") or []
@@ -261,7 +338,7 @@ class InfoOverlay:
             if not res or "result" not in res:
                 return "获取中..."
             result = res["result"]
-            files = result.get("files", [])
+            files = self._filter_selected(result.get("files", []))
             base_dir = result.get("dir", "") or base_dir
             if not files:
                 return "获取中..."
@@ -294,13 +371,13 @@ class InfoOverlay:
             total = g["total"]
             done = g["done"]
             pct = (done / total * 100) if total > 0 else 0
-            lines.append(f"{d + '/':<48} {nice_size(done):>10} / {nice_size(total):<10}  {pct:>5.1f}%")
+            lines.append(f"{self._truncate_display(d + '/', 320)}\t{nice_size(done)}\t/ {nice_size(total)}\t{pct:.1f}%")
             for name, t, dn in g["files"]:
                 p2 = (dn / t * 100) if t > 0 else 0
-                lines.append(f"  {name[:44]:<44} {nice_size(dn):>10} / {nice_size(t):<10}  {p2:>5.1f}%")
+                lines.append(f"  {self._truncate_display(name, 310)}\t{nice_size(dn)}\t/ {nice_size(t)}\t{p2:.1f}%")
         for name, t, dn in root_files:
             p2 = (dn / t * 100) if t > 0 else 0
-            lines.append(f"{name[:48]:<48} {nice_size(dn):>10} / {nice_size(t):<10}  {p2:>5.1f}%")
+            lines.append(f"{self._truncate_display(name, 320)}\t{nice_size(dn)}\t/ {nice_size(t)}\t{p2:.1f}%")
         return "\n".join(lines) if lines else "无任务信息"
 
     def _poll_fg_window(self):

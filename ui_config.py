@@ -1055,11 +1055,28 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         # 启动逻辑保持不变
         raw_input = self.url_text.get("1.0", "end").strip()
         url_lines = [line.strip().strip('"').strip("'") for line in raw_input.split("\n") if line.strip()] if raw_input else []
-        seed_paths = [s["path"] for s in self._seeds]
-        if not url_lines and not seed_paths:
+        if not url_lines and not self._seeds:
             messagebox.showerror("错误", "请输入链接或选择种子文件")
             return
-        lines = list(seed_paths) + list(url_lines)
+        lines = []
+        for _s in self._seeds:
+            lines.append(_s["path"])
+            _files = _s.get("files") or []
+            _sel = _s.get("selected") or set()
+            if _files and _sel and len(_sel) < len(_files):
+                _sel_str = ",".join(str(i) for i in sorted(_sel))
+                lines.append(f"--select-file={_sel_str}")
+            _disp = None
+            if _files and len(_sel) == 1:
+                _idx = next(iter(_sel))
+                for _f in _files:
+                    if _f["index"] == _idx:
+                        _disp = os.path.basename(_f["path"])
+                        break
+            if not _disp:
+                _disp = _s.get("name") or os.path.basename(_s["path"])
+            lines.append(f"--torrent-display-name={_disp}")
+        lines += url_lines
         
         save_path = self.path_var.get().strip()
         if not os.path.exists(save_path):

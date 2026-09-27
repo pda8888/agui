@@ -411,6 +411,8 @@ class Aria2GUI(ctk.CTkToplevel):
             from utils import log_write
             _cli = self.config.get("aria2c_path")
             _errs = []
+            _clean_args = [a for a in args if not (
+                isinstance(a, str) and a.startswith("--torrent-display-name="))]
             _ap = resolve_aria2_path(
                 cli_path=_cli,
                 on_progress=self._on_fetch_progress,
@@ -423,7 +425,7 @@ class Aria2GUI(ctk.CTkToplevel):
                 _msg = "无法获取 aria2c.exe，请用 -a 指定路径或检查网络。" + chr(10) + chr(10) + "详细：" + chr(10) + _det
                 self.after(0, self._on_error, _msg)
                 return
-            self.aria2_proc, ready, stderr = start_aria2c(args, _ap, self.log_file)
+            self.aria2_proc, ready, stderr = start_aria2c(_clean_args, _ap, self.log_file)
             if not ready:
                 err = stderr.decode("utf-8", errors="ignore").strip() if stderr else "未知错误"
                 log_write(self.log_file, f"first start failed: {err}; retrying after force refetch")
@@ -431,7 +433,7 @@ class Aria2GUI(ctk.CTkToplevel):
                 _dir = default_target_dir()
                 _ap2 = fetch_aria2c(target_dir=_dir, force=True)
                 if _ap2:
-                    self.aria2_proc, ready, stderr = start_aria2c(args, _ap2, self.log_file)
+                    self.aria2_proc, ready, stderr = start_aria2c(_clean_args, _ap2, self.log_file)
             if not ready:
                 err = stderr.decode("utf-8", errors="ignore").strip() if stderr else "未知错误"
                 self.after(0, self._on_error, f"Aria2c进程无法启动。\n\n{err}")
@@ -490,10 +492,24 @@ class Aria2GUI(ctk.CTkToplevel):
         if "file-allocation" not in opts:
             opts["file-allocation"] = "none"
         torrents, metalinks, magnets, http_mirrors = [], [], [], []
+        _t_opts = {}
+        _cur_t = None
+        for _a in args_list:
+            if not isinstance(_a, str):
+                continue
+            _low_a = _a.lower()
+            if _low_a.endswith(".torrent") and os.path.isfile(_a):
+                _cur_t = _a
+                _t_opts.setdefault(_a, {"select_file": None, "display_name": None})
+            elif _a.startswith("--select-file=") and _cur_t is not None:
+                _t_opts[_cur_t]["select_file"] = _a.split("=", 1)[1]
+            elif _a.startswith("--torrent-display-name=") and _cur_t is not None:
+                _t_opts[_cur_t]["display_name"] = _a.split("=", 1)[1]
         for u in urls:
             low = u.lower()
             if low.endswith(".torrent") and os.path.isfile(u):
-                torrents.append(u)
+                _o = _t_opts.get(u) or {"select_file": None, "display_name": None}
+                torrents.append({"path": u, "select_file": _o["select_file"], "display_name": _o["display_name"]})
             elif (low.endswith(".meta4") or low.endswith(".metalink")) and os.path.isfile(u):
                 metalinks.append(u)
             elif low.startswith("magnet:"):
@@ -601,12 +617,16 @@ class Aria2GUI(ctk.CTkToplevel):
             if g and first_gid is None:
                 first_gid = g
 
-        for t_path in p["torrents"]:
-            gid = self._rpc_add_torrent(t_path, opts)
+        for _t in p["torrents"]:
+            _t_path = _t["path"]
+            _t_opts = dict(opts)
+            if _t.get("select_file"):
+                _t_opts["select-file"] = _t["select_file"]
+            gid = self._rpc_add_torrent(_t_path, _t_opts)
             if gid:
                 if first_gid is None:
                     first_gid = gid
-                n = os.path.basename(t_path)
+                n = _t.get("display_name") or os.path.basename(_t_path)
                 self.after(0, lambda g=gid, nm=n, nc=no_cancel, tt=title, c=cd:
                            self._register_task(g, nm, nc, task_title=tt, countdown=c))
 

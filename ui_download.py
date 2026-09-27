@@ -515,12 +515,19 @@ class Aria2GUI(ctk.CTkToplevel):
         }
 
     def _rpc_add_torrent(self, t_path, opts):
-        """添加 torrent，返回 gid 或 None"""
+        """添加 torrent，返回 gid 或 None；成功后登记 info_hash"""
         try:
             with open(t_path, "rb") as f:
                 content = base64.b64encode(f.read()).decode("utf-8")
             res = self.rpc.add_torrent(content, [], opts)
             if res and "result" in res:
+                try:
+                    from utils import torrent_info_hash, register_downloaded_torrent
+                    _ih = torrent_info_hash(t_path)
+                    if _ih:
+                        register_downloaded_torrent(_ih)
+                except Exception:
+                    pass
                 return res["result"]
         except Exception as e:
             from utils import log_write

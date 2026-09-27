@@ -13,7 +13,7 @@ a = Analysis(
     datas=[
         ('assets', 'assets')
     ],
-    hiddenimports=[],
+    hiddenimports=['windnd'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

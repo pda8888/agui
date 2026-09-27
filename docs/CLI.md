@@ -20,7 +20,7 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 
 | 参数 | 类型 | 说明 |
 |---|---|---|
-| --title "标题\|说明" | string | 窗口标题和卡片上方黄字标题。`\|` 后为说明文本 |
+| --title "标题\|说明" | string | 卡片上方黄字标题。`\|` 后为说明文本。窗口标题固定为 `老王的小拖船 V1.4 -- <状态>` |
 | --countdown N | int | 任务级倒计时。完成后 N 秒删卡。-1 永久保留（默认），0 立即删卡 |
 | --global-countdown N | int | 全局倒计时。设置后覆盖所有未钉死任务。任务自带 --countdown 时优先级更高 |
 | --metalink=<b64> | string | metalink 4.0 / 3.0 内容 base64 编码。可与 URL / magnet / 本地种子路径混用，各建独立任务 |
@@ -72,6 +72,8 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 **--all-proxy**：所有任务的 HTTP/HTTPS 代理，如 `--all-proxy=http://127.0.0.1:7890`。任务级参数，随 addUri 传给单任务。
 
 **--header**：可多次传入，如 `--header="Authorization: Bearer xxx" --header="Cookie: sess=abc"`。内部收集为数组传给 aria2 RPC，单次传入也按数组处理。
+
+**文件命名优先级**：用户 `--out`（或 GUI「重命名」栏） > 服务器 `Content-Disposition: attachment; filename=` > aria2c 默认（URL basename）。
 
 ---
 ## 三、典型调用场景
@@ -372,7 +374,7 @@ Windows 下即 `C:\\Users\\<用户名>\\.agui\\agui_config.json`。
     "max_conn": 16, "file_allocation": "falloc",
     "rpc_port": 16800, "min_split_size": "1M",
     "speed_limit": "0", "log_enabled": true,
-    "log_path": "", "advanced": false
+    "log_path": ""
   }
 }
 ```

@@ -306,3 +306,143 @@ def parse_metalink_hashes_from_b64(b64_str):
     except Exception:
         return {}
     return _parse_metalink_root(root)
+
+def _bdecode(data):
+    """最小 bencode 解码器，返回 (value, next_pos)"""
+    def _int(i):
+        j = data.index(b"e", i)
+        return int(data[i:j]), j + 1
+    def _bytes(i):
+        j = data.index(b":", i)
+        n = int(data[i:j])
+        s = i + (j - i) + 1
+        return data[s:s + n], s + n
+    def _list(i):
+        i += 1
+        out = []
+        while data[i:i + 1] != b"e":
+            v, i = _decode_at(i)
+            out.append(v)
+        return out, i + 1
+    def _dict(i):
+        i += 1
+        out = {}
+        while data[i:i + 1] != b"e":
+            k, i = _bytes(i)
+            v, i = _decode_at(i)
+            out[k] = v
+        return out, i + 1
+    def _decode_at(i):
+        ch = data[i:i + 1]
+        if ch == b"i":
+            return _int(i + 1)
+        if ch == b"l":
+            return _list(i)
+        if ch == b"d":
+            return _dict(i)
+        return _bytes(i)
+    v, _ = _decode_at(0)
+    return v
+
+def _bdec_str(b):
+    """bencode 字节串转 str，UTF-8 → GBK → latin-1"""
+    if isinstance(b, str):
+        return b
+    if not isinstance(b, (bytes, bytearray)):
+        return str(b)
+    for enc in ("utf-8", "gbk"):
+        try:
+            return bytes(b).decode(enc)
+        except Exception:
+            continue
+    return bytes(b).decode("latin-1", errors="replace")
+
+_DOWNLOADED_TORRENT_HASHES = set()
+
+def register_downloaded_torrent(h):
+    if h:
+        _DOWNLOADED_TORRENT_HASHES.add(h)
+
+def is_torrent_downloaded(h):
+    return bool(h) and h in _DOWNLOADED_TORRENT_HASHES
+
+def _skip_bencode_value(data, i):
+    ch = data[i:i + 1]
+    if ch == b"i":
+        j = data.index(b"e", i)
+        return j + 1
+    if ch == b"l":
+        i += 1
+        while data[i:i + 1] != b"e":
+            i = _skip_bencode_value(data, i)
+        return i + 1
+    if ch == b"d":
+        i += 1
+        while data[i:i + 1] != b"e":
+            j = data.index(b":", i)
+            klen = int(data[i:j])
+            i = j + 1 + klen
+            i = _skip_bencode_value(data, i)
+        return i + 1
+    j = data.index(b":", i)
+    n = int(data[i:j])
+    return j + 1 + n
+
+def torrent_info_hash(path):
+    """返回 .torrent 的 info 段 SHA1（40 hex）；失败返回 None"""
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+        if data[0:1] != b"d":
+            return None
+        i = 1
+        while data[i:i + 1] != b"e":
+            j = data.index(b":", i)
+            klen = int(data[i:j])
+            k = data[j + 1:j + 1 + klen]
+            i = j + 1 + klen
+            v_start = i
+            i = _skip_bencode_value(data, i)
+            if k == b"info":
+                return hashlib.sha1(data[v_start:i]).hexdigest()
+        return None
+    except Exception:
+        return None
+
+def parse_torrent_files(path):
+    """解析 .torrent 文件，返回 {name, files:[{index,path,length}], total_length}
+    单文件种子：files 只有 1 项（path=name）；多文件：path 为相对路径拼接。
+    index 从 1 开始，对应 aria2 select-file 序号。
+    失败返回 None。"""
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+        meta = _bdecode(data)
+        if not isinstance(meta, dict):
+            return None
+        info = meta.get(b"info")
+        if not isinstance(info, dict):
+            return None
+        name_raw = info.get(b"name.utf-8") or info.get(b"name") or b""
+        name = _bdec_str(name_raw)
+        files_field = info.get(b"files")
+        out_files = []
+        total = 0
+        if isinstance(files_field, list):
+            for idx, item in enumerate(files_field, 1):
+                if not isinstance(item, dict):
+                    continue
+                length = int(item.get(b"length", 0) or 0)
+                pth = item.get(b"path.utf-8") or item.get(b"path") or []
+                parts = [_bdec_str(p) for p in pth] if isinstance(pth, list) else []
+                rel = "/".join(parts) if parts else name
+                out_files.append({"index": idx, "path": rel, "length": length})
+                total += length
+        else:
+            length = int(info.get(b"length", 0) or 0)
+            out_files.append({"index": 1, "path": name, "length": length})
+            total = length
+        return {"name": name, "files": out_files, "total_length": total}
+    except Exception:
+        return None
+

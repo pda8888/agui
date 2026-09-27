@@ -46,6 +46,10 @@ python main.py
 
 无参数启动，弹出配置界面，填写 URL 与保存路径，点击提交。
 
+「重命名」栏同时决定磁盘保存文件名（透传 aria2c 的 `--out`）与卡片标题；留空时由 aria2c 决定（优先遵从服务器 `Content-Disposition: attachment; filename=`，其次取 URL basename）。
+
+窗口标题格式：`老王的小拖船 V1.4 -- <状态>`，状态取值 `等待...` / `N个任务（…）` / `正在下载 aria2c.exe，请稍等……`。
+
 ### 命令行模式
 python main.py "https://example.com/file.zip"
 
@@ -89,7 +93,7 @@ pyinstaller --clean --noconfirm agui.spec
 
 产物 `dist\agui.exe` 约 9.6 MB。首次运行时若 `%TEMP%\aria2c.exe` 不存在，
 自动从 gh-proxy.com / hk.gh-proxy.org / cdn.gh-proxy.com 三代理依次下载 aria2 1.37.0 并解压。
-下载期间状态栏会显示「正在下载 aria2c.exe...」，不阻塞窗口；完成后自动启动 sidecar。
+下载期间窗口标题会显示「正在下载 aria2c.exe，请稍等……」，不阻塞窗口；完成后自动启动 sidecar。
 也可用 `-a` / `--aria2c-path <path>` 指定本地 aria2c.exe。
 
 > 注意：`set VAR=val & cmd` 中 `&` 前的空格会进值（变 `"val "`）；请把 `set` 单独一行执行。

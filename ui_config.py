@@ -6,6 +6,14 @@ import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
+import queue
+
+try:
+    import windnd
+    _HAS_WINDND = True
+except Exception:
+    windnd = None
+    _HAS_WINDND = False
 
 from config import APP_TITLE, Theme, DEFAULT_USER_AGENT
 from utils import extract_urls_and_out, extract_referer
@@ -48,6 +56,10 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             self._current_theme = "midnight"
         self._history = self._load_history()
         self._history_popup = None
+        self._drop_queue = queue.Queue()
+        self._seeds = []
+        self._seed_cursor = -1
+        self._flash_after_id = None
         self._initial_positioned = False
         self._theme_menu_win = None
         self._theme_fg_id = None
@@ -62,6 +74,7 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         
         self._build_ui()
         
+        self.after(200, self._poll_drop_queue)
         self.geometry("640x420")
         self.after(50, self._apply_dynamic_height)
         
@@ -140,9 +153,17 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         )
         self.url_text.pack(fill="x")
         add_context_menu(self.url_text)
+        self.url_text.bind("<KeyRelease>", self._on_url_edited, add="+")
 
         # --- 种子 tab ---
         self.tab_seed_frame = ctk.CTkFrame(self.content_container, fg_color="transparent")
+
+        # chips 区（多个已加载种子）
+        self._seed_chips_wrap = ctk.CTkFrame(
+            self.tab_seed_frame, fg_color="transparent"
+        )
+
+        # drop 入口
         self._drop_wrap = ctk.CTkFrame(
             self.tab_seed_frame, height=100, fg_color="#2d3748",
             corner_radius=6, border_width=0,
@@ -160,11 +181,16 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         except Exception:
             pass
 
-        self.seed_files_label = ctk.CTkLabel(
-            self.tab_seed_frame, text="", text_color=Theme.SEMI_MUTED,
-            font=FONT_SMALL, anchor="w", justify="left",
+        # 文件列表区（当前选中种子的文件）
+        self._seed_files_wrap = ctk.CTkScrollableFrame(
+            self.tab_seed_frame, height=180, fg_color="#2d3748", corner_radius=6,
         )
-        # 初始不 pack；仅在有内容时才显示
+
+        # 汇总行
+        self._seed_summary_lbl = ctk.CTkLabel(
+            self.tab_seed_frame, text="", text_color=Theme.SEMI_MUTED,
+            font=FONT_SMALL, anchor="e",
+        )
 
         # 默认显示链接 tab
         self.tab_link_frame.pack(fill="x")
@@ -325,6 +351,19 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             except Exception:
                 pass
     
+    def _hook_windnd(self):
+        """切到种子 tab 后延迟 hook；幂等"""
+        if not _HAS_WINDND:
+            return
+        if getattr(self, "_windnd_hooked", False):
+            return
+        try:
+            self.update_idletasks()
+            windnd.hook_dropfiles(self.drop_canvas, func=self._on_drop_torrent)
+            self._windnd_hooked = True
+        except Exception:
+            pass
+
     def _switch_tab(self, key):
         self.current_tab = key
         _ref = getattr(self, "_row1_ref", None)
@@ -340,7 +379,12 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
                 self.tab_seed_frame.pack(fill="x", before=_ref)
             else:
                 self.tab_seed_frame.pack(fill="x")
+            self.after(100, self._hook_windnd)
         self._set_tab_active(key)
+        try:
+            self.after(30, self._apply_dynamic_height)
+        except Exception:
+            pass
         self.after(30, self._apply_dynamic_height)
 
     def _set_tab_active(self, key):
@@ -639,7 +683,8 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             c.create_rectangle(6, 6, w - 6, h - 6, outline="#4b5563",
                                dash=(6, 4), width=2, tags="border")
             c.create_text(w // 2, h // 2, text="将种子拖到此处，或点击选择",
-                          fill="#9ca3af", font=FONT_NORMAL, tags="label")
+                          fill="#9ca3af", font=FONT_NORMAL, tags="label",
+                          width=max(40, w - 24))
         except Exception:
             pass
 
@@ -648,6 +693,286 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
         if folder:
             folder = folder.replace("/", "\\")
             self.path_var.set(folder)
+
+    def _on_drop_torrent(self, files):
+        """windnd 回调（非主线程）：只投递到队列"""
+        try:
+            if not files:
+                return
+            raw_item = files[0]
+            if isinstance(raw_item, bytes):
+                path = raw_item.decode("gbk", errors="replace")
+            else:
+                path = str(raw_item)
+            path = path.strip().strip(chr(34)).strip(chr(39))
+            self._drop_queue.put(path)
+        except Exception:
+            pass
+
+    def _flash_non_seed(self, text="非种子文件"):
+        """模态提示"""
+        try:
+            messagebox.showwarning("提示", text, parent=self)
+        except Exception:
+            pass
+
+    def _clear_flash(self):
+        self._flash_after_id = None
+        try:
+            self.drop_canvas.delete("flash")
+        except Exception:
+            pass
+
+    def _render_seed_tab(self):
+        # chips
+        for w in list(self._seed_chips_wrap.winfo_children()):
+            w.destroy()
+        if self._seeds:
+            if not getattr(self, "_chips_packed", False):
+                try:
+                    self._seed_chips_wrap.pack(fill="x", pady=(0, 6), before=self._drop_wrap)
+                except Exception:
+                    self._seed_chips_wrap.pack(fill="x", pady=(0, 6))
+                self._chips_packed = True
+            for i, s in enumerate(self._seeds):
+                self._render_chip(i, s)
+        else:
+            try:
+                self._seed_chips_wrap.pack_forget()
+            except Exception:
+                pass
+            self._chips_packed = False
+
+        # files
+        for w in list(self._seed_files_wrap.winfo_children()):
+            w.destroy()
+        cur = self._seed_cursor if 0 <= self._seed_cursor < len(self._seeds) else -1
+        if cur >= 0 and self._seeds[cur]["files"]:
+            if not getattr(self, "_files_packed", False):
+                try:
+                    self._seed_files_wrap.pack(fill="x", pady=(8, 0), after=self._drop_wrap)
+                except Exception:
+                    self._seed_files_wrap.pack(fill="x", pady=(8, 0))
+                self._files_packed = True
+            self._render_file_rows(self._seeds[cur])
+        else:
+            try:
+                self._seed_files_wrap.pack_forget()
+            except Exception:
+                pass
+            self._files_packed = False
+
+        # summary
+        if cur >= 0:
+            if not getattr(self, "_summary_packed", False):
+                _prev = self._seed_files_wrap if getattr(self, "_files_packed", False) else self._drop_wrap
+                try:
+                    self._seed_summary_lbl.pack(fill="x", pady=(4, 0), after=_prev)
+                except Exception:
+                    self._seed_summary_lbl.pack(fill="x", pady=(4, 0))
+                self._summary_packed = True
+            self._update_seed_summary()
+        else:
+            try:
+                self._seed_summary_lbl.pack_forget()
+            except Exception:
+                pass
+            self._summary_packed = False
+
+        try:
+            self.after(30, self._apply_dynamic_height)
+        except Exception:
+            pass
+
+    def _render_chip(self, i, seed):
+        is_cur = (i == self._seed_cursor)
+        chip = ctk.CTkFrame(
+            self._seed_chips_wrap,
+            fg_color=("#3a4659" if is_cur else "#2d3748"),
+            corner_radius=6,
+        )
+        chip.pack(fill="x", pady=2)
+
+        name_lbl = ctk.CTkLabel(
+            chip, text=seed["name"], text_color=Theme.TEXT,
+            font=FONT_SMALL, anchor="w",
+        )
+        name_lbl.pack(side="left", padx=(8, 4), pady=4, fill="x", expand=True)
+
+        tag = ctk.CTkLabel(
+            chip, text="种子任务", text_color="#93c5fd",
+            fg_color="#1e3a8a", corner_radius=4,
+            font=FONT_SMALL,
+        )
+        tag.pack(side="left", padx=(0, 4))
+
+        x_btn = ctk.CTkButton(
+            chip, text="\u2715", width=24, height=24,
+            fg_color="transparent", hover_color="#4b5563",
+            text_color=Theme.TEXT, font=FONT_SMALL,
+            command=lambda idx=i: self._remove_seed(idx),
+        )
+        x_btn.pack(side="right", padx=(0, 4))
+
+        for w in (chip, name_lbl, tag):
+            try:
+                w.bind("<Button-1>", lambda e, idx=i: self._on_chip_click(idx))
+            except Exception:
+                pass
+
+    def _on_chip_click(self, i):
+        if i == self._seed_cursor:
+            return
+        self._seed_cursor = i
+        self._render_seed_tab()
+
+    def _remove_seed(self, i):
+        if not (0 <= i < len(self._seeds)):
+            return
+        del self._seeds[i]
+        if not self._seeds:
+            self._seed_cursor = -1
+        elif self._seed_cursor >= len(self._seeds):
+            self._seed_cursor = len(self._seeds) - 1
+        self._render_seed_tab()
+
+    def _render_file_rows(self, seed):
+        from utils import nice_size
+        # 全选行
+        header = ctk.CTkFrame(self._seed_files_wrap, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 2))
+        all_selected = (len(seed["selected"]) == len(seed["files"])) if seed["files"] else False
+        all_var = tk.BooleanVar(value=all_selected)
+        ctk.CTkCheckBox(
+            header, text="", variable=all_var,
+            width=24, checkbox_width=18, checkbox_height=18,
+            fg_color=Theme.ACCENT, hover_color=Theme.ACCENT_LIGHT,
+            command=lambda s=seed, v=all_var: self._toggle_all_files(s, v),
+        ).pack(side="left")
+        ctk.CTkLabel(header, text="序号", width=50, text_color=Theme.SEMI_MUTED,
+                     font=FONT_SMALL, anchor="w").pack(side="left")
+        ctk.CTkLabel(header, text="文件名", text_color=Theme.SEMI_MUTED,
+                     font=FONT_SMALL, anchor="w").pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(header, text="大小", width=80, text_color=Theme.SEMI_MUTED,
+                     font=FONT_SMALL, anchor="e").pack(side="right")
+
+        for f in seed["files"]:
+            row = ctk.CTkFrame(self._seed_files_wrap, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            var = tk.BooleanVar(value=(f["index"] in seed["selected"]))
+            cb = ctk.CTkCheckBox(
+                row, text="", variable=var,
+                width=24, checkbox_width=18, checkbox_height=18,
+                fg_color=Theme.ACCENT, hover_color=Theme.ACCENT_LIGHT,
+                command=lambda s=seed, idx=f["index"], v=var: self._toggle_file(s, idx, v.get()),
+            )
+            cb.pack(side="left")
+            ctk.CTkLabel(row, text=str(f["index"]), width=50, text_color=Theme.TEXT,
+                         font=FONT_SMALL, anchor="w").pack(side="left")
+            ctk.CTkLabel(row, text=f["path"], text_color=Theme.TEXT,
+                         font=FONT_SMALL, anchor="w").pack(side="left", fill="x", expand=True)
+            ctk.CTkLabel(row, text=nice_size(f["length"]), width=80, text_color=Theme.SEMI_MUTED,
+                         font=FONT_SMALL, anchor="e").pack(side="right")
+
+    def _toggle_file(self, seed, idx, checked):
+        if checked:
+            seed["selected"].add(idx)
+        else:
+            seed["selected"].discard(idx)
+        self._render_seed_tab()
+
+    def _toggle_all_files(self, seed, var):
+        if var.get():
+            seed["selected"] = set(f["index"] for f in seed["files"])
+        else:
+            seed["selected"] = set()
+        self._render_seed_tab()
+
+    def _update_seed_summary(self):
+        cur = self._seed_cursor
+        if not (0 <= cur < len(self._seeds)):
+            return
+        seed = self._seeds[cur]
+        from utils import nice_size
+        n = len(seed["selected"])
+        total = len(seed["files"])
+        size = sum(f["length"] for f in seed["files"] if f["index"] in seed["selected"])
+        try:
+            self._seed_summary_lbl.configure(text=f"{n}/{total} \u2014\u2014 {nice_size(size)}")
+        except Exception:
+            pass
+
+    def _on_url_edited(self, _e=None):
+        pass
+
+    def _poll_drop_queue(self):
+        """主线程轮询 drop 队列"""
+        try:
+            while True:
+                path = self._drop_queue.get_nowait()
+                low = path.lower()
+                if low.endswith((".torrent", ".meta4", ".metalink")):
+                    self._append_seed_path(path)
+                else:
+                    self._flash_non_seed()
+        except queue.Empty:
+            pass
+        except Exception:
+            pass
+        try:
+            self.after(200, self._poll_drop_queue)
+        except Exception:
+            pass
+
+    def _append_seed_path(self, filename):
+        """解析种子并追加到 _seeds；渲染 tab；同名去重"""
+        import os as _os
+        from utils import parse_torrent_files
+        from utils import torrent_info_hash, is_torrent_downloaded
+        _abs = _os.path.abspath(filename)
+        for _s in self._seeds:
+            try:
+                if _os.path.abspath(_s["path"]) == _abs:
+                    self._flash_non_seed("种子已存在")
+                    return
+            except Exception:
+                pass
+        _low = filename.lower()
+        _ih = torrent_info_hash(filename) if _low.endswith(".torrent") else None
+        if _ih:
+            for _s in self._seeds:
+                if _s.get("info_hash") == _ih:
+                    self._flash_non_seed("种子已存在")
+                    return
+            if is_torrent_downloaded(_ih):
+                self._flash_non_seed("该种子已在下载列表中")
+                return
+        entry = None
+        if _low.endswith(".torrent"):
+            meta = parse_torrent_files(filename)
+            if not meta:
+                self._flash_non_seed()
+                return
+            entry = {
+                "path": filename,
+                "name": meta["name"],
+                "files": meta["files"],
+                "total_length": meta["total_length"],
+                "selected": set(f["index"] for f in meta["files"]),
+                "info_hash": _ih,
+            }
+        else:
+            entry = {
+                "path": filename,
+                "name": _os.path.basename(filename),
+                "files": [],
+                "total_length": 0,
+                "selected": set(),
+                "info_hash": None,
+            }
+        self._seeds.append(entry)
+        self._seed_cursor = len(self._seeds) - 1
+        self._render_seed_tab()
 
     def _browse_torrent(self):
         filename = filedialog.askopenfilename(
@@ -661,23 +986,11 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
             initialdir=self.path_var.get(),
         )
         if filename:
-            current = self.url_text.get("1.0", "end").strip()
-            if current:
-                self.url_text.insert("end", "\n" + filename)
+            _low = filename.lower()
+            if _low.endswith((".torrent", ".meta4", ".metalink")):
+                self._append_seed_path(filename)
             else:
-                self.url_text.insert("end", filename)
-            try:
-                _paths = self.url_text.get("1.0", "end").strip().splitlines()
-                _seed = [p for p in _paths if p.lower().endswith((".torrent", ".meta4", ".metalink"))]
-                if _seed:
-                    self.seed_files_label.configure(text="\n".join(_seed))
-                    if not self.seed_files_label.winfo_manager():
-                        self.seed_files_label.pack(fill="x", pady=(8, 0))
-                else:
-                    self.seed_files_label.configure(text="")
-                    self.seed_files_label.pack_forget()
-            except Exception:
-                pass
+                self._flash_non_seed()
                 
     def _collect_args(self, save_path, lines):
         # 参数收集逻辑保持不变
@@ -741,14 +1054,12 @@ class Aria2ConfigGUI(ctk.CTkToplevel):
     def _start_download(self):
         # 启动逻辑保持不变
         raw_input = self.url_text.get("1.0", "end").strip()
-        if not raw_input:
+        url_lines = [line.strip().strip('"').strip("'") for line in raw_input.split("\n") if line.strip()] if raw_input else []
+        seed_paths = [s["path"] for s in self._seeds]
+        if not url_lines and not seed_paths:
             messagebox.showerror("错误", "请输入链接或选择种子文件")
             return
-        
-        lines = [line.strip().strip('"').strip("'") for line in raw_input.split("\n") if line.strip()]
-        if not lines:
-            messagebox.showerror("错误", "内容为空")
-            return
+        lines = list(seed_paths) + list(url_lines)
         
         save_path = self.path_var.get().strip()
         if not os.path.exists(save_path):

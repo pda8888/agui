@@ -118,6 +118,9 @@
 - `_create_task_row` 未拆（~200 行）——耦合拖选/悬停/tooltip，拆出需传大量回调
 - 无 CI——`fix/smoke.py` 手工跑替代
 - `cyberpunk_v1` 已删，保留 `cp1`/`cp2`
+- Named Pipe 替代 TCP——成本 > 收益；改用端口 Hash 隔离（见第十节 #13）
+- 墓碑缓冲——countdown=0 时任务立刻蒸发是调用者显式契约，agui 不替它擦屁股
+- aria2 RPC 透传——拒绝，不扩大攻击面
 
 ---
 
@@ -135,3 +138,52 @@
 10. tooltip / 主题菜单等浮层定时器挂 `self.after` 而非 `widget.after`
 11. `aria2c.exe` 按需下载：`-a`/`--aria2c-path` 优先；否则用 `%TEMP%\aria2c.exe`；不存在则从 gh-proxy 三代理拉 aria2 1.37.0 zip 解压。启动失败强制重下重试一次。下载期间状态栏显示「正在下载 aria2c.exe...」，不阻塞（实现：`ui_download._on_fetch_progress`）
 12. Windows cmd `set VAR=val & cmd` 中 `&` 前的空格会进值（变 `"val "`）；判断用 `.strip()`，或 `set` 单独一行
+13. IPC 端口按用户隔离：`config.get_ipc_port()` = 19811 + hash(LOCALAPPDATA) % 200。多用户同机不串台，同账户返回同值
+14. 日志不再 CWD 自动生成：未显式指定 log_path / --log-to 就不落盘。命令行与 GUI 配置仍有效
+15. callback-port 使用 3 次退避重试（1s 超时 × 3，间隔 0.5s）。下游若需严格同步，别依赖单次握手成功
+16. HTTP API 支持别名：remove / cancel / delete → kill。明确不透传 aria2 RPC
+17. QUERY 组长 GID 返回组聚合：files 每项带 gid / status / error；顶层带 group_gids / group_size。普通单 gid 任务返回与旧版一致
+
+---
+
+## 十一、外部技术评审意见的响应（2026-09-30）
+
+一次外部技术评审提出 6 条改进建议。逐条响应如下，供后续回顾时避免走回头路。
+
+### 1. Named Pipe 替代 TCP IPC
+
+- 决策：**部分采纳，方案换轻量版**
+- 问题成立：固定端口在多用户同机场景下会串台
+- 未采纳 Named Pipe 的原因：Windows 专用、需 ctypes / pywin32、跨 Session 仍需安全描述符，成本高于收益
+- 落地：`config.get_ipc_port()` = 19811 + hash(LOCALAPPDATA) % 200。不同账户天然隔离，同账户同值。见第十节 #13
+
+### 2. 日志默认写入 CWD
+
+- 决策：**采纳，且更强**
+- 原问题：只读 CWD 下创建日志失败会闪退；无脑生成时间戳文件产垃圾
+- 落地：取消"CWD 自动生成时间戳文件"。未显式指定 log_path / `--log-to` 就不落盘。见第十节 #14
+
+### 3. countdown=0 导致任务蒸发（墓碑缓冲建议）
+
+- 决策：**不采纳**
+- 理由：现有 QUERY 分支先查 aria2 再查本地 dict，aria2 完成态在 removeDownloadResult 前长期存在，不会瞬间消失
+- 唯一"蒸发"场景是调用者显式要求 countdown=0，语义自洽，agui 不替调用者擦屁股
+- 加墓碑 = 引入生命周期管理复杂度，收益 < 成本
+
+### 4. Metalink 子切片错误不透传
+
+- 决策：**采纳**
+- 原问题：QUERY 组长 GID 只返回组长状态，下游无法定位失败切片
+- 落地：QUERY 组长时返回组聚合。files 每项带 gid / status / error / path / length / selected；顶层带 group_gids / group_size
+- 向下兼容：普通单 gid 任务返回结构与旧版完全一致。见第十节 #17
+
+### 5. HTTP API 缺乏别名容错
+
+- 决策：**部分采纳**
+- 采纳：remove / cancel / delete → kill 的别名映射
+- 拒绝：透传 aria2 RPC。会扩大攻击面并模糊 agui 接口契约。见第十节 #16
+
+### 6. callback-port 单次触发无重试
+
+- 决策：**采纳**
+- 落地：单次连接改为 3 次尝试，超时 1s，间隔 0.5s（总窗口 ~3.5s）。见第十节 #15

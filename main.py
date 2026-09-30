@@ -37,17 +37,26 @@ ctk.set_default_color_theme("blue")
 
 
 def send_result_via_callback(port, json_str):
-    """将结果 JSON 发送到调用者指定的回调端口，成功返回 True，失败返回 False"""
-    try:
-        import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3.0)
-        s.connect(("127.0.0.1", port))
-        s.sendall((json_str + "\n").encode("utf-8"))
-        s.close()
-        return True
-    except Exception:
-        return False
+    """将结果 JSON 发送到调用者指定的回调端口；
+    单次超时 1.0s，最多 3 次尝试，间隔 0.5s。成功返回 True，全失败返回 False。"""
+    import socket
+    import time as _time
+    for _attempt in range(3):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(1.0)
+            s.connect(("127.0.0.1", port))
+            s.sendall((json_str + "\n").encode("utf-8"))
+            s.close()
+            return True
+        except Exception:
+            try:
+                s.close()
+            except Exception:
+                pass
+            if _attempt < 2:
+                _time.sleep(0.5)
+    return False
         
 # === 主函数 ===
 def main():
@@ -113,17 +122,7 @@ def main():
                 if not os.path.isabs(_lp):
                     _lp = os.path.join(os.getcwd(), _lp)
                 cfg["log_file"] = _lp
-            else:
-                import time as _time
-                _ts = _time.strftime("%Y-%m-%d-%H-%M")
-                _base = f"agui-{_ts}"
-                _fname = _base + ".log"
-                _i = 1
-                while os.path.exists(_fname):
-                    _fname = f"{_base}-{_i}.log"
-                    _i += 1
-                cfg["log_file"] = _fname
-        # log_enabled=False：不设 log_file，不生成空文件
+        # 未显式指定 log_path 时不生成日志
 
     if cfg.get("log_file"):
         ensure_log_file(cfg["log_file"])

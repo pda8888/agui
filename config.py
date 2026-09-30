@@ -14,6 +14,18 @@ APP_VERSION = "1.4.0"
 RPC_HOST = "127.0.0.1"
 RPC_PORT = 16800  # 动态分配
 IPC_PORT = 19811  # 进程间通信
+
+def get_ipc_port():
+    """按当前用户隔离的 IPC 端口：基础 19811 + 用户哈希偏移 0~199。
+    不同 Windows 账户的 LOCALAPPDATA 不同，天然隔离；同账户返回同值。"""
+    try:
+        import hashlib
+        uid = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        h = hashlib.md5(uid.encode("utf-8")).hexdigest()
+        off = int(h[:6], 16) % 200
+        return IPC_PORT + off
+    except Exception:
+        return IPC_PORT
 RPC_STARTUP_WAIT = 0.25
 RPC_STARTUP_RETRIES = 20
 

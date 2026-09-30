@@ -5,7 +5,10 @@ import time
 import socket
 import json
 # import pickle
-from config import IPC_PORT
+from config import IPC_PORT, get_ipc_port
+
+# 模块级：本进程绑定的 IPC 端口（按用户隔离）
+IPC_PORT = get_ipc_port()
 
 def try_send_to_main_instance(args_list, max_retries=1, retry_delay=0.2, timeout=2.0):
     """尝试将参数发送给已运行的主实例，并返回响应字符串，失败返回 None"""

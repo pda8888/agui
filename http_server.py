@@ -21,6 +21,9 @@ def make_handler(gui):
                 body = self.rfile.read(content_length)
                 data = json.loads(body)
                 method = data.get("method")
+                _ALIAS = {"remove": "kill", "cancel": "kill", "delete": "kill"}
+                if isinstance(method, str):
+                    method = _ALIAS.get(method, method)
                 params = data.get("params", {})
 
                 if method == "add":
@@ -119,6 +122,18 @@ def make_handler(gui):
                 self._send_json({"status": "failed", "message": "gid required"})
                 return
             try:
+                with gui.tasks_lock:
+                    _task = gui.tasks.get(gid)
+                if _task:
+                    _gg = _task.get("group_gids") or []
+                    if len(_gg) > 1:
+                        _agg = self._aggregate_group(_gg)
+                        if _agg is not None:
+                            self._send_json({"status": "success", "data": _agg})
+                            return
+            except Exception:
+                pass
+            try:
                 res = gui.rpc.tell_status(gid, [
                     "status", "totalLength", "completedLength",
                     "downloadSpeed", "errorMessage", "files"
@@ -169,6 +184,67 @@ def make_handler(gui):
                         "status": "failed",
                         "message": "task initializing or not found, retry later"
                     })
+
+        def _aggregate_group(self, group_gids):
+            total = 0
+            done = 0
+            speed = 0
+            err_msg = ""
+            statuses = []
+            all_files = []
+            for _g in group_gids:
+                try:
+                    _r = gui.rpc.tell_status(_g, [
+                        "status", "totalLength", "completedLength",
+                        "downloadSpeed", "errorMessage", "files"
+                    ])
+                except Exception:
+                    _r = None
+                if not _r or "result" not in _r:
+                    continue
+                _rs = _r["result"]
+                _st = _rs.get("status", "unknown")
+                statuses.append(_st)
+                try:
+                    total += int(_rs.get("totalLength", 0) or 0)
+                    done += int(_rs.get("completedLength", 0) or 0)
+                    speed += int(_rs.get("downloadSpeed", 0) or 0)
+                except Exception:
+                    pass
+                if _st == "error" and not err_msg:
+                    err_msg = _rs.get("errorMessage", "")
+                for _f in _rs.get("files", []) or []:
+                    _entry = {
+                        "index": _f.get("index", ""),
+                        "path": _f.get("path", ""),
+                        "length": _f.get("length", "0"),
+                        "completedLength": _f.get("completedLength", "0"),
+                        "selected": _f.get("selected", "true"),
+                        "status": _st,
+                        "gid": _g,
+                    }
+                    if _st == "error" and _rs.get("errorMessage"):
+                        _entry["error"] = _rs.get("errorMessage")
+                    all_files.append(_entry)
+            if not statuses:
+                return None
+            if all(_s == "complete" for _s in statuses):
+                _agg_st = "complete"
+            elif "error" in statuses:
+                _agg_st = "error"
+            else:
+                _agg_st = next((_s for _s in statuses if _s != "complete"), statuses[0])
+            return {
+                "status": _agg_st,
+                "totalLength": str(total),
+                "completedLength": str(done),
+                "downloadSpeed": str(speed),
+                "errorMessage": err_msg,
+                "downloadReady": (_agg_st == "complete"),
+                "files": all_files,
+                "group_gids": list(group_gids),
+                "group_size": len(group_gids),
+            }
 
         @staticmethod
         def _build_fallback_status(task):

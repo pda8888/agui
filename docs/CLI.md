@@ -21,7 +21,7 @@ agui 提供 3 种对外接口，主程序推荐使用命令行 + 回调端口。
 | 参数 | 类型 | 说明 |
 |---|---|---|
 | --title "标题\|说明" | string | 卡片上方黄字标题。`\|` 后为说明文本。窗口标题固定为 `老王的小拖船 V1.4 -- <状态>` |
-| --countdown N | int | 任务级倒计时。完成后 N 秒删卡。-1 永久保留（默认），0 立即删卡 |
+| --countdown N | int | 任务级倒计时。下载完成后 N 秒删卡。-1 永久保留（默认），0 立即删卡 |
 | --global-countdown N | int | 全局倒计时。设置后覆盖所有未钉死任务。任务自带 --countdown 时优先级更高 |
 | --metalink=<b64> | string | metalink 4.0 / 3.0 内容 base64 编码。可与 URL / magnet / 本地种子路径混用，各建独立任务 |
 | --log-to <path> | string | 日志文件路径 |
@@ -191,9 +191,9 @@ JSON 格式（全部 UTF-8）：
 | 杀掉成功 | {"status":"success","message":"task killed"} |
 | 杀掉失败 | {"status":"failed","message":"<原因>"} |
 
-若主程序不监听该端口：agui 写日志"回调发送失败"后正常退出，不重试。
+若主程序不监听该端口：agui 写日志"回调发送失败"后正常退出。
 
-超时：agui 侧 3 秒，连接不上直接放弃。
+重试策略：单次连接超时 1.0 秒，最多尝试 3 次，间隔 0.5 秒（总窗口 ~3.5 秒）。全部失败后放弃。
 
 ---
 ## 五、HTTP API
@@ -211,7 +211,7 @@ JSON 格式（全部 UTF-8）：
       "params": {}
     }
 
-method 取值为 add / query / kill。
+method 取值为 add / query / kill。remove / cancel / delete 作为 kill 的别名自动映射。
 
 ### 5.1 add
 
@@ -265,6 +265,32 @@ method 取值为 add / query / kill。
 
 返回格式同第四节"查询成功"。
 
+**组长 GID 查询（metalink 组任务）**：当传入的 GID 是 metalink 组任务的组长时，返回体额外携带组聚合信息。
+
+```json
+{
+  "status": "success",
+  "data": {
+    "status": "error",
+    "totalLength": "10485760",
+    "completedLength": "5242880",
+    "downloadSpeed": "0",
+    "errorMessage": "MD5Mismatch",
+    "downloadReady": false,
+    "files": [
+      {"index":"1","path":"01.7z","length":"5242880","completedLength":"5242880","selected":"true","status":"complete","gid":"<子gid1>"},
+      {"index":"2","path":"02.7z","length":"5242880","completedLength":"0","selected":"true","status":"error","gid":"<子gid2>","error":"MD5Mismatch"}
+    ],
+    "group_gids": ["<组长GID>", "<子gid1>", "<子gid2>"],
+    "group_size": 3
+  }
+}
+```
+
+下游可据 files 内每项的 status / error 定位失败切片；据 gid 字段定位所属子任务，必要时单独 kill。
+
+普通单 gid 任务（非组）返回结构与旧版完全一致，无 group_gids / group_size 字段。
+
 ### 5.3 kill
 
     {"method": "kill", "params": {"gid": "abc..."}}
@@ -293,11 +319,11 @@ method 取值为 add / query / kill。
 
 ## 六、单实例与 IPC
 
-端口：config.IPC_PORT = 19811。
+端口：按当前用户隔离，`config.get_ipc_port()` = 19811 + hash(LOCALAPPDATA) % 200。不同 Windows 账户在同一台机上天然隔离，同账户返回同值。单用户机上通常落在 19811~20010 区间。
 
 启动流程：
 
-1. 每个 agui 进程启动时尝试 bind 19811
+1. 每个 agui 进程启动时尝试 bind `get_ipc_port()` 返回的端口
 2. bind 成功 → 主实例，启动 IPCServer 监听
 3. bind 失败 → 从实例，把 raw_args 通过 TCP 发给主实例，主实例把 raw_args 交给 _add_task_sync 添加任务，结果原路返回
 
@@ -333,11 +359,11 @@ agui.exe --log-to=D:\logs\my.log https://example.com/file.zip
 
 | `log_enabled` | `log_path` | 行为 |
 |---|---|---|
-| `true`（默认） | 空 | 在**当前工作目录**生成时间戳文件 `agui-YYYY-MM-DD-HH-MM.log` |
+| `true`（默认） | 空 | **不生成任何日志文件** |
 | `true` | 有值（绝对或相对） | 写到该路径；相对路径按当前工作目录解析 |
 | `false` | — | **不生成任何日志文件**（连空文件也不创建） |
 
-同一分钟内重复启动会追加 -1、-2 后缀避免覆盖：`agui-2026-09-20-09-31-1.log`。
+不再自动在当前工作目录生成时间戳文件，避免在只读目录下报错或产生垃圾。
 
 配置界面高级选项内有「记录日志」勾选框（默认勾选），可指定文件名或绝对路径。勾选框对应 `log_enabled`，路径对应 `log_path`，点「保存配置」后写入配置文件，下次启动生效。
 
@@ -441,9 +467,13 @@ Windows 下即 `C:\\Users\\<用户名>\\.agui\\agui_config.json`。
 
 7. IPC 端口冲突
 
-   若上一轮 agui 未干净退出，19811 会被占用，新启动的进程被当作从实例转发后退出，表现为"启动无反应"。排查：
+   若上一轮 agui 未干净退出，`get_ipc_port()` 返回的端口会被占用，新启动的进程被当作从实例转发后退出，表现为"启动无反应"。排查：
 
-       netstat -ano | findstr :19811
+       python -c "from config import get_ipc_port; print(get_ipc_port())"
+
+   拿到端口号后排查：
+
+       netstat -ano | findstr :<端口>
        tasklist | findstr python
 
    清理：

@@ -70,15 +70,22 @@ ARIA2_PATH = get_aria2c_path()
 def resolve_aria2_path(cli_path=None, on_progress=None, on_need_manual=None, log_path=None, err_out=None):
     """按决策链解析 aria2c 路径（仅解析/下载，不做启动验证）。
     1. cli_path 指定且存在 → 返回该路径
-    2. %TEMP%\aria2c.exe 存在 → 返回
-    3. 用 aria2_fetcher 下载到 %TEMP% → 成功返回
-    4. 下载失败 → 调 on_need_manual() 让上层弹窗选手选；返回手选路径或 None
+    2. 打包内嵌 ARIA2_PATH 存在（非 SLIM 包）→ 返回
+    3. %TEMP%\aria2c.exe 存在 → 返回
+    4. 用 aria2_fetcher 下载到 %TEMP% → 成功返回
+    5. 下载失败 → 调 on_need_manual() 让上层弹窗选手选；返回手选路径或 None
     启动失败后的重试由调用方处理。
     """
     if cli_path:
         _cp = os.path.abspath(cli_path)
         if os.path.isfile(_cp):
             return _cp
+    try:
+        _embedded = globals().get("ARIA2_PATH")
+        if _embedded and os.path.isfile(_embedded):
+            return _embedded
+    except Exception:
+        pass
     from aria2_fetcher import fetch_aria2c, default_target_dir
     _dir = default_target_dir()
     _temp_exe = os.path.join(_dir, ARIA2_FILENAME)

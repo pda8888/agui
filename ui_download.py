@@ -20,6 +20,9 @@ from arg_parser import get_task_options, parse_custom_t_arg
 from ui_styles import create_button, FONT_NORMAL, FONT_SMALL, get_work_area_and_scaling
 from info_overlay import InfoOverlay
 
+# 多任务时卡片之间的垂直留白（单任务保持 0）
+CARD_GAP_PX = 2
+
 class Aria2GUI(ctk.CTkToplevel):
     """Aria2下载任务管理界面"""
     def __init__(self, parent, config, server_socket=None):
@@ -105,7 +108,7 @@ class Aria2GUI(ctk.CTkToplevel):
         
         # 顶部栏：左侧两行（状态 + 统计），右侧图标组（垂直居中）
         self.header = ctk.CTkFrame(self, fg_color="transparent")
-        self.header.pack(fill="x", padx=12, pady=10)
+        self.header.pack(fill="x", padx=12, pady=(2, 2))
 
         right_box = ctk.CTkFrame(self.header, fg_color="transparent")
         right_box.pack(side="right")
@@ -226,13 +229,19 @@ class Aria2GUI(ctk.CTkToplevel):
         except Exception:
             total_h = 60
         total_h = int(total_h / sc) if sc > 0 else total_h
-        # 卡间距 5（上下各 2+3），末卡底边距 N=15
-        total_h += 30
-        CARD_GAP = 5
+        # header 上下各留 2，卡片 pack 无额外留白
+        total_h += 14
+        CARD_GAP = CARD_GAP_PX if len(tasks_snapshot) > 1 else 0
 
         for task in tasks_snapshot:
             ui = task.get("ui", {})
             frame = ui.get("frame")
+            if frame is not None:
+                try:
+                    if frame.winfo_exists():
+                        frame.pack_configure(pady=(0, CARD_GAP))
+                except Exception:
+                    pass
             card_h = None
             if frame is not None:
                 try:
@@ -255,9 +264,18 @@ class Aria2GUI(ctk.CTkToplevel):
                         pass
             total_h += card_h + CARD_GAP
 
-        target_h = max(160, total_h)
+        # 有任务时按实际内容高度，不用固定下限抬高窗口（否则单任务下巴过大）
+        if tasks_snapshot:
+            target_h = total_h
+        else:
+            target_h = max(160, total_h)
         target_h = min(1200, target_h)
         target_w = 640
+
+        try:
+            _, _, _, _, _sc2 = get_work_area_and_scaling(self)
+        except Exception:
+            _sc2 = 1.0
 
         if not self.is_position_set:
             wx0, wy0, ww, wh, _sc2 = get_work_area_and_scaling(self)
@@ -371,6 +389,11 @@ class Aria2GUI(ctk.CTkToplevel):
                 return b'{"status": "failed", "message": "failed to add task"}\n'
         except Exception as e:
             return f'{{"status": "failed", "message": "{str(e)}"}}\n'.encode("utf-8")
+
+    def _focus_main_window(self):
+        """仅把焦点还给主界面，不改 topmost/geometry。"""
+        self.lift()
+        self.focus_force()
 
     def _bring_to_front(self):
         self.deiconify()
@@ -736,22 +759,22 @@ class Aria2GUI(ctk.CTkToplevel):
     def _create_task_row(self, gid, name, no_cancel, task_title):
         frame = ctk.CTkFrame(self.task_container, fg_color=Theme.CARD, corner_radius=8,
                              border_width=1, border_color=Theme.CARD)
-        frame.pack(fill="x", pady=(2, 3))
+        frame.pack(fill="x", pady=(0, CARD_GAP_PX))
         _is_cyber = (getattr(Theme, "STYLE", "flat") == "cyber")
         if _is_cyber:
             stripe = ctk.CTkFrame(frame, fg_color=Theme.ACCENT, width=4,
                                    height=1, corner_radius=0)
             stripe.pack(side="left", fill="y")
             inner = ctk.CTkFrame(frame, fg_color="transparent")
-            inner.pack(fill="both", expand=True, padx=(18, 14), pady=10)
+            inner.pack(fill="both", expand=True, padx=(18, 14), pady=(2, 2))
         else:
             inner = ctk.CTkFrame(frame, fg_color="transparent")
-            inner.pack(fill="both", expand=True, padx=14, pady=10)
+            inner.pack(fill="both", expand=True, padx=14, pady=(2, 2))
         
         _title_lbl = None
         if task_title:
             line0 = ctk.CTkFrame(inner, fg_color="transparent")
-            line0.pack(fill="x", pady=(0, 2))
+            line0.pack(fill="x", pady=(0, 0))
             _title_lbl = ctk.CTkLabel(line0, text=task_title, text_color="#ffd700",
                                       font=(FONT_NORMAL[0], 11, "bold"))
             _title_lbl.pack(side="left")
@@ -793,16 +816,16 @@ class Aria2GUI(ctk.CTkToplevel):
         
         if _is_cyber:
             _glow = ctk.CTkFrame(inner, fg_color="#0a1e2e", corner_radius=5)
-            _glow.pack(fill="x", pady=(6, 4))
+            _glow.pack(fill="x", pady=(0, 0))
             bar = ctk.CTkProgressBar(_glow, height=6, corner_radius=3,
                                       progress_color=Theme.ACCENT)
             bar.set(0)
-            bar.pack(fill="x", padx=2, pady=2)
+            bar.pack(fill="x", padx=2, pady=(0, 0))
         else:
             bar = ctk.CTkProgressBar(inner, height=6, corner_radius=3,
                                       progress_color=Theme.ACCENT)
             bar.set(0)
-            bar.pack(fill="x", pady=(8, 6))
+            bar.pack(fill="x", pady=(0, 0))
         
         line3 = ctk.CTkFrame(inner, fg_color="transparent")
         line3.pack(fill="x")
@@ -1316,6 +1339,10 @@ class Aria2GUI(ctk.CTkToplevel):
         except Exception as e:
             from utils import log_write
             log_write(self.log_file, f"config submit failed: {e}")
+        # 配置窗在 on_submit 返回后才 destroy，延迟一拍把焦点交还主界面
+        self.after(0, self._focus_main_window)
+        # 配置窗在 on_submit 返回后才 destroy，延迟一拍把焦点交还主界面
+        self.after(0, self._bring_to_front)
 
     def _show_theme_menu(self):
         if getattr(self, "_theme_menu_win", None) is not None:
